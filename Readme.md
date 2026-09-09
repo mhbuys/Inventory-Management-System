@@ -1,0 +1,1 @@
+A inventory management system for a hypothetical game store
