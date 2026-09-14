@@ -1,6 +1,6 @@
 from app import create_app
 from database import get_db, init_db
-from items import add_item, remove_item
+from items import add_item, remove_item, update_quantity
 
 
 # Verify that the app can build the SQLite schema into a temporary database file.
@@ -71,3 +71,35 @@ def test_remove_item_deletes_product_and_inventory(tmp_path):
 
     assert product is None
     assert inventory is None
+
+
+def test_update_quantity_changes_inventory_quantity(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=5)
+        update_quantity(product_id, 12)
+        quantity = get_db().execute(
+            "SELECT quantity FROM inventory WHERE product_id = ?",
+            (product_id,),
+        ).fetchone()[0]
+
+    assert quantity == 12
+
+
+def test_update_quantity_rejects_negative_quantity(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=5)
+
+        try:
+            update_quantity(product_id, -1)
+        except ValueError as error:
+            assert str(error) == "Quantity cannot be negative"
+        else:
+            raise AssertionError("Expected negative quantity to be rejected")

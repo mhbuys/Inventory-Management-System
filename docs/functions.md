@@ -29,6 +29,17 @@ This document describes the current item-management functions and where readers 
 - **Database behavior:** The database schema's foreign-key cascade also removes the product's related inventory record.
 - **Errors:** Raises `ValueError` when no product exists with the supplied ID.
 
+## `update_quantity`
+
+- **Location:** `items.py` (`update_quantity`)
+- **Purpose:** Replaces an item's current inventory quantity using its product ID.
+- **Parameters:**
+  - `product_id`: ID of the product to update.
+  - `quantity`: New nonnegative inventory quantity.
+- **Returns:** Nothing after a successful update.
+- **Database behavior:** The updated inventory record is committed immediately.
+- **Errors:** Raises `ValueError` for a missing product or negative quantity.
+
 ## How To Find The Functions
 
 1. Open `items.py` in the project root.
