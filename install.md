@@ -73,10 +73,17 @@ The virtual environment should be activated whenever the server is run manually.
 
 ## Initialize SQLite
 
-Create the application data directory and initialize the database:
+Create the application data directory and make sure the current user can write to it:
 
 ```bash
 mkdir -p instance
+sudo chown -R $USER:$USER instance
+chmod -R u+rwX instance
+```
+
+Then initialize the database:
+
+```bash
 flask --app app init-db
 ```
 
@@ -108,12 +115,12 @@ If it fails, the command will print:
 not connected
 ```
 
-## Run the Development Server
+## Run the Flask Server
 
 Start Flask so it can be reached from your server:
 
 ```bash
-flask --app app run --host (your server IP) --port 5000
+flask --app app run --host 0.0.0.0 --port 5000
 ```
 
 Replace `(your server IP)` with the actual IP address of the machine running the app.
@@ -135,17 +142,12 @@ sudo ufw allow 5000/tcp
 sudo ufw status
 ```
 
-The production deployment should use HTTPS through Nginx rather than exposing Flask's development server directly.
-
 ## Production Direction
 
 The development server is suitable for local development and initial VM testing. For production, the planned deployment is:
 
 1. Flask application
-2. Gunicorn application server
-3. Nginx reverse proxy
-4. HTTPS certificate
-5. A systemd service to start the IMS automatically
+2. A systemd service to start the IMS automatically
 
 Those services will be added after the initial Flask and SQLite application is working.
 
@@ -162,7 +164,7 @@ flask --app app init-db
 flask --app app run
 ```
 
-Ubuntu Server remains the recommended VM operating system because the deployment commands and future Gunicorn, Nginx, and systemd setup are simpler there.
+Ubuntu Server remains the recommended VM operating system because the deployment commands and systemd setup are simpler there.
 
 ## Current Database Decision
 
