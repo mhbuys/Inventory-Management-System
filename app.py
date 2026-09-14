@@ -38,6 +38,15 @@ def create_app(test_config=None):
         except Exception:
             print("not connected")
 
+    # Simple health check for the Flask app and SQLite connection.
+    @app.get("/api/health")
+    def health():
+        try:
+            get_db().execute("SELECT 1").fetchone()
+            return jsonify({"status": "ok", "database": "connected"})
+        except Exception:
+            return jsonify({"status": "error", "database": "not connected"}), 500
+
     # Simple HTTP endpoint for a database connectivity check.
     @app.get("/api/db-status")
     def db_status():

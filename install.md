@@ -27,6 +27,7 @@ The server requires:
 
 The Python `sqlite3` module provides the Python-to-SQL interface used by the application. A separate SQLite service is not required.
 
+This project follows the same straightforward setup style as the sample repository: install the dependencies, initialize the database, and run the app with your server's actual IP address.
 ## Ubuntu Installation
 
 Update the operating system packages:
@@ -95,21 +96,43 @@ instance/inventory.db
 
 The database will contain the IMS data needed for Products and Inventory Events. Product records will support the documented fields: product ID, product name, category, quantity in stock, reorder threshold, reorder quantity, and product status.
 
-## Run the Development Server
+## Test the Database Connection
 
-Start Flask so it can be reached from the VM network:
+Confirm the app can reach SQLite before starting the main server:
 
 ```bash
-flask --app app run --host 0.0.0.0 --port 5000
+flask --app app test-db-connection
 ```
+
+Expected output:
+
+```text
+connected
+```
+
+If it fails, the command will print:
+
+```text
+not connected
+```
+
+## Run the Development Server
+
+Start Flask so it can be reached from your server:
+
+```bash
+flask --app app run --host (your server IP) --port 5000
+```
+
+Replace `(your server IP)` with the actual IP address of the machine running the app.
 
 Open the server from another computer using:
 
 ```text
-http://<server-ip>:5000
+http://(your server IP):5000
 ```
 
-For local-only testing, use `127.0.0.1` instead of `0.0.0.0`.
+For local-only testing, use `127.0.0.1` instead of `(your server IP)`.
 
 ## Open the Firewall Port
 

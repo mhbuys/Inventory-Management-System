@@ -10,4 +10,4 @@ flask --app app init-db
 
 printf '\nIMS server setup complete. Start it with:\n'
 printf 'source .venv/bin/activate\n'
-printf 'flask --app app run --host 0.0.0.0 --port 5000\n'
+printf 'flask --app app run --host (your server IP) --port 5000\n'
