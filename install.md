@@ -13,7 +13,6 @@ Minimum development or VM requirements:
 - 10 GB available disk space
 - SSH access for remote administration
 
-SQLite does not require a separate database server. The database is stored as a local file managed by the Flask application.
 
 ## Required Software
 
@@ -25,23 +24,18 @@ The server requires:
 - Flask
 - SQLite 3
 
-The Python `sqlite3` module provides the Python-to-SQL interface used by the application. A separate SQLite service is not required.
-
-This project follows the same straightforward setup style as the sample repository: install the dependencies, initialize the database, and run the app with your server's actual IP address.
 ## Ubuntu Installation
 
-Update the operating system packages:
+Run the following commands in the Ubuntu terminal to install everything needed for this project:
 
 ```bash
-sudo apt update
-sudo apt upgrade -y
-```
-
-Install Python, the virtual environment package, Git, and SQLite:
-
-```bash
+sudo apt update && sudo apt upgrade -y
 sudo apt install -y python3 python3-venv python3-pip git sqlite3
 ```
+
+This installs Python, the virtual environment tools, pip, Git, and SQLite.
+
+After that, verify the installation:
 
 Verify the installation:
 
@@ -55,11 +49,9 @@ sqlite3 --version
 Clone the project and enter its directory:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/mhbuys/Inventory-Management-System.git
 cd Inventory-Management-System
 ```
-
-Replace `<repository-url>` with the team's GitHub repository URL.
 
 ## Create the Python Environment
 
