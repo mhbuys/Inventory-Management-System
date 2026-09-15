@@ -1,5 +1,5 @@
 from app import create_app
-from database import get_db, init_db
+from database import get_db, init_db, query_db
 from items import add_item, remove_item, update_quantity
 
 
@@ -18,6 +18,26 @@ def test_app_initializes_database(tmp_path):
     # These are the core tables required for the inventory system.
     assert "products" in {row[0] for row in tables}
     assert "inventory" in {row[0] for row in tables}
+
+
+def test_query_db_returns_matching_rows(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        database = get_db()
+        database.execute(
+            "INSERT INTO products (name, category) VALUES (?, ?)",
+            ("Catan", "board_game"),
+        )
+        database.commit()
+        rows = query_db(
+            "SELECT name FROM products WHERE category = ?",
+            ("board_game",),
+        )
+
+    assert [row["name"] for row in rows] == ["Catan"]
 
 
 def test_add_item_creates_product_and_inventory(tmp_path):

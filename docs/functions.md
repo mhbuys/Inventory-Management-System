@@ -2,6 +2,16 @@
 
 This document describes the current item-management functions and where readers can find their implementation.
 
+## `query_db`
+
+- **Location:** `database.py` (`query_db`)
+- **Purpose:** Executes a parameterized read query and returns all matching rows.
+- **Parameters:**
+  - `query`: SQL query string using `?` placeholders for values.
+  - `parameters`: Values bound to the query placeholders. Defaults to an empty tuple.
+- **Returns:** A list of `sqlite3.Row` objects.
+- **Database behavior:** Uses the current Flask application's database connection.
+
 ## `add_item`
 
 - **Location:** `items.py`, line 4 (`add_item`)
