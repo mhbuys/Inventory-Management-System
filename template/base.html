@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{% block title %}Inventory Management System{% endblock %}</title>
+        <style>
+            /* ### Design: small, self-contained starter styles for this first page. */
+            /* ### Design: shared colors make future theme changes easier. */
+            :root {
+                --ink: #24313b;
+                --muted: #6d7a83;
+                --line: #dbe3e6;
+                --paper: #f7faf9;
+                --surface: #ffffff;
+                --accent: #216e68;
+                --accent-dark: #174d4a;
+                --danger: #a84848;
+            }
+
+            /* ### Design: use predictable sizing for every element. */
+            * { box-sizing: border-box; }
+
+            /* ### Design: establish the page canvas and readable default type. */
+            body {
+                min-height: 100vh;
+                margin: 0;
+                color: var(--ink);
+                background: var(--paper);
+                font-family: Georgia, "Times New Roman", serif;
+            }
+
+            /* ### Design: keep controls consistent with the page typography. */
+            button, input { font: inherit; }
+
+            /* ### Design: the banner keeps navigation visible across the site. */
+            .top-banner {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                padding: 1rem clamp(1rem, 4vw, 4rem);
+                color: #ffffff;
+                background: var(--accent-dark);
+            }
+
+            /* ### Design: group banner branding and action controls. */
+            .brand { margin: 0; font-size: 1.25rem; letter-spacing: .02em; }
+            .banner-actions, .item-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+
+            /* ### Design: shared button styling supports links and form buttons. */
+            .button {
+                display: inline-block;
+                border: 1px solid transparent;
+                border-radius: 4px;
+                padding: .6rem .85rem;
+                color: var(--ink);
+                background: var(--surface);
+                cursor: pointer;
+                text-decoration: none;
+                font-size: .92rem;
+            }
+
+            /* ### Design: color variants separate primary, destructive, and quiet actions. */
+            .button:hover, .button:focus-visible { border-color: #8eb8b1; }
+            .button-primary { color: #ffffff; background: var(--accent); }
+            .button-danger { color: #ffffff; background: var(--danger); }
+            .button-quiet { color: #ffffff; background: transparent; border-color: #8db2ae; }
+
+            /* ### Design: two-column desktop layout gives login and inventory equal focus. */
+            .page-shell {
+                display: grid;
+                grid-template-columns: minmax(220px, 280px) 1fr;
+                gap: clamp(1.5rem, 4vw, 4rem);
+                width: min(1180px, calc(100% - 2rem));
+                margin: 0 auto;
+                padding: clamp(2rem, 6vw, 5rem) 0;
+            }
+
+            /* ### Design: small labels provide hierarchy above major headings. */
+            .eyebrow {
+                margin: 0 0 .45rem;
+                color: var(--accent);
+                font: 700 .75rem/1.2 Arial, sans-serif;
+                letter-spacing: .14em;
+                text-transform: uppercase;
+            }
+
+            /* ### Design: keep headings compact and supporting text subdued. */
+            h1, h2, p { margin-top: 0; }
+            h1 { margin-bottom: .65rem; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1; }
+            h2 { margin-bottom: .35rem; font-size: 1.5rem; }
+            .muted { color: var(--muted); }
+
+            /* ### Design: panels frame the two primary areas without heavy decoration. */
+            .login-panel, .inventory-panel {
+                border-top: 4px solid var(--accent);
+                padding: 1.5rem;
+                background: var(--surface);
+                box-shadow: 0 12px 30px rgba(36, 49, 59, .07);
+            }
+
+            /* ### Design: login controls are sized for quick keyboard entry. */
+            .login-panel { align-self: start; }
+            .login-panel label { display: block; margin: 1rem 0 .35rem; font: 700 .85rem Arial, sans-serif; }
+            .login-panel input { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: .7rem; }
+            .login-panel .button { width: 100%; margin-top: 1.2rem; }
+
+            /* ### Design: inventory heading balances title information and item count. */
+            .inventory-heading {
+                display: flex;
+                align-items: end;
+                justify-content: space-between;
+                gap: 1rem;
+                margin-bottom: 1.5rem;
+            }
+
+            /* ### Design: rows make item names, details, and actions easy to scan. */
+            .inventory-list { border-top: 1px solid var(--line); }
+            .inventory-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                padding: 1rem 0;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .inventory-row strong { display: block; margin-bottom: .25rem; }
+            .status { color: var(--accent); font: 700 .75rem Arial, sans-serif; text-transform: uppercase; }
+
+            /* ### Design: stack content on smaller screens to prevent cramped controls. */
+            @media (max-width: 760px) {
+                .top-banner, .inventory-heading, .inventory-row { align-items: stretch; flex-direction: column; }
+                .page-shell { grid-template-columns: 1fr; padding-top: 2rem; }
+                .banner-actions, .item-actions { width: 100%; }
+                .banner-actions .button, .item-actions .button { flex: 1; text-align: center; }
+            }
+        </style>
+    </head>
+    <body>
+        <!-- ### Design: universal top banner shared by future pages. -->
+        <header class="top-banner">
+            <p class="brand">Inventory Management System</p>
+            <nav class="banner-actions" aria-label="Inventory actions">
+                <a class="button button-primary" href="#add-item">Add item</a>
+                <a class="button button-danger" href="#remove-item">Remove item</a>
+                <a class="button button-quiet" href="#logout">Log out</a>
+            </nav>
+        </header>
+
+        <main class="page-shell">
+            <!-- ### Design: login area is ready for the future authentication route. -->
+            <aside class="login-panel" id="login">
+                <p class="eyebrow">Team access</p>
+                <h2>Welcome back.</h2>
+                <p class="muted">Sign in to view and manage your inventory.</p>
+                <form action="#login" method="post">
+                    <label for="username">Username</label>
+                    <input id="username" name="username" type="text" autocomplete="username" required>
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required>
+                    <button class="button button-primary" type="submit">Log in</button>
+                </form>
+            </aside>
+
+            <!-- ### Design: inventory is the basic home view after login. -->
+            <section class="inventory-panel" aria-labelledby="inventory-title">
+                <div class="inventory-heading">
+                    <div>
+                        <p class="eyebrow">Overview</p>
+                        <h1 id="inventory-title">Inventory</h1>
+                        <p class="muted">A clear starting point for tracking what your team has on hand.</p>
+                    </div>
+                    <span class="status">3 items tracked</span>
+                </div>
+                <div class="inventory-list">
+                    <article class="inventory-row">
+                        <div><strong>Sample item</strong><span class="muted">General stock</span></div>
+                        <div class="item-actions"><a class="button button-primary" href="#add-item">Add item</a><a class="button button-danger" href="#remove-item">Remove item</a></div>
+                    </article>
+                    <article class="inventory-row">
+                        <div><strong>Office supplies</strong><span class="muted">12 units available</span></div>
+                        <span class="status">In stock</span>
+                    </article>
+                    <article class="inventory-row">
+                        <div><strong>Equipment</strong><span class="muted">Needs review</span></div>
+                        <span class="status">Attention</span>
+                    </article>
+                </div>
+            </section>
+        </main>
+
+        {% block content %}{% endblock %}
+    </body>
+</html>
