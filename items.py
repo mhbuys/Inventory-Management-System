@@ -52,3 +52,19 @@ def remove_item(product_id):
         raise ValueError(f"No item found with product ID {product_id}")
 
     database.commit()
+
+
+def update_quantity(product_id, quantity):
+    """Set an item's inventory quantity."""
+    if quantity < 0:
+        raise ValueError("Quantity cannot be negative")
+
+    database = get_db()
+    result = database.execute(
+        "UPDATE inventory SET quantity = ? WHERE product_id = ?",
+        (quantity, product_id),
+    )
+    if result.rowcount == 0:
+        raise ValueError(f"No item found with product ID {product_id}")
+
+    database.commit()

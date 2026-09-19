@@ -14,6 +14,11 @@ def get_db():
     return g.db
 
 
+def query_db(query, parameters=()):
+    """Execute a parameterized read query and return all matching rows."""
+    return get_db().execute(query, parameters).fetchall()
+
+
 # Close the database connection when the request context ends.
 def close_db(_error=None):
     database = g.pop("db", None)
