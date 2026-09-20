@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, render_template
 
 from database import close_db, get_db, init_db
 
@@ -8,7 +8,11 @@ from database import close_db, get_db, init_db
 # Create the Flask app using a factory so tests can pass in custom config.
 def create_app(test_config=None):
     # Use an instance folder for the SQLite database file.
-    app = Flask(__name__, instance_relative_config=True)
+    app = Flask(
+        __name__,
+        instance_relative_config=True,
+        template_folder="template",
+    )
     app.config.from_mapping(
         DATABASE=os.path.join(app.instance_path, "inventory.db"),
     )
@@ -22,6 +26,14 @@ def create_app(test_config=None):
     # Ensure the instance directory exists before creating the database file.
     os.makedirs(app.instance_path, exist_ok=True)
     app.teardown_appcontext(close_db)
+
+    @app.get("/")
+    def inventory_page():
+        return render_template("base.html")
+
+    @app.get("/login")
+    def login_page():
+        return render_template("login.html")
 
     # CLI helper to initialize the SQLite schema.
     @app.cli.command("init-db")

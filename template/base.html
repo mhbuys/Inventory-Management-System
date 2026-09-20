@@ -67,11 +67,8 @@
             .button-danger { color: #ffffff; background: var(--danger); }
             .button-quiet { color: #ffffff; background: transparent; border-color: #8db2ae; }
 
-            /* ### Design: two-column desktop layout gives login and inventory equal focus. */
+            /* ### Design: keep the inventory view focused on daily stock work. */
             .page-shell {
-                display: grid;
-                grid-template-columns: minmax(220px, 280px) 1fr;
-                gap: clamp(1.5rem, 4vw, 4rem);
                 width: min(1180px, calc(100% - 2rem));
                 margin: 0 auto;
                 padding: clamp(2rem, 6vw, 5rem) 0;
@@ -92,19 +89,13 @@
             h2 { margin-bottom: .35rem; font-size: 1.5rem; }
             .muted { color: var(--muted); }
 
-            /* ### Design: panels frame the two primary areas without heavy decoration. */
-            .login-panel, .inventory-panel {
+            /* ### Design: panels frame the inventory workspace without heavy decoration. */
+            .inventory-panel {
                 border-top: 4px solid var(--accent);
                 padding: 1.5rem;
                 background: var(--surface);
                 box-shadow: 0 12px 30px rgba(36, 49, 59, .07);
             }
-
-            /* ### Design: login controls are sized for quick keyboard entry. */
-            .login-panel { align-self: start; }
-            .login-panel label { display: block; margin: 1rem 0 .35rem; font: 700 .85rem Arial, sans-serif; }
-            .login-panel input { width: 100%; border: 1px solid var(--line); border-radius: 3px; padding: .7rem; }
-            .login-panel .button { width: 100%; margin-top: 1.2rem; }
 
             /* ### Design: inventory heading balances title information and item count. */
             .inventory-heading {
@@ -150,20 +141,6 @@
         </header>
 
         <main class="page-shell">
-            <!-- ### Design: login area is ready for the future authentication route. -->
-            <aside class="login-panel" id="login">
-                <p class="eyebrow">Team access</p>
-                <h2>Welcome back.</h2>
-                <p class="muted">Sign in to view and manage your inventory.</p>
-                <form action="#login" method="post">
-                    <label for="username">Username</label>
-                    <input id="username" name="username" type="text" autocomplete="username" required>
-                    <label for="password">Password</label>
-                    <input id="password" name="password" type="password" autocomplete="current-password" required>
-                    <button class="button button-primary" type="submit">Log in</button>
-                </form>
-            </aside>
-
             <!-- ### Design: inventory is the basic home view after login. -->
             <section class="inventory-panel" aria-labelledby="inventory-title">
                 <div class="inventory-heading">
