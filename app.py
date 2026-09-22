@@ -34,7 +34,11 @@ def create_app(test_config=None):
     @app.get("/login")
     def login_page():
         return render_template("login.html")
-
+    
+    @app.get("/add-item")
+    def add_item_page():
+        return render_template("add_item.html")  
+   
     # CLI helper to initialize the SQLite schema.
     @app.cli.command("init-db")
     def init_db_command():
