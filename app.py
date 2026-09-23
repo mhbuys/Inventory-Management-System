@@ -3,7 +3,7 @@ import os
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 from database import close_db, get_db, init_db
-from items import add_item
+from items import add_item, remove_item
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -58,8 +58,21 @@ def create_app(test_config=None):
             )
             return redirect(url_for("inventory_page"))
 
-        return render_template("add_item.html")  
-   
+        return render_template("add_item.html")
+
+    @app.route("/remove-item", methods=["GET", "POST"])
+    def remove_item_page():
+        items = get_db().execute(
+            "SELECT product_id, name FROM products ORDER BY name"
+        ).fetchall()
+
+        if request.method == "POST":
+            product_id = int(request.form["product_id"])
+            remove_item(product_id)
+            return redirect(url_for("inventory_page"))
+
+        return render_template("remove_item.html", items=items)
+
     # CLI helper to initialize the SQLite schema.
     @app.cli.command("init-db")
     def init_db_command():

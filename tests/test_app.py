@@ -134,6 +134,36 @@ def test_inventory_page_displays_database_items(tmp_path):
     assert "Sample item" not in page
 
 
+def test_remove_item_page_lists_items_and_removes_selected_item(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        add_item("Catan", "board_game", quantity=3)
+        add_item("Ticket to Ride", "card_game", quantity=2)
+
+    client = app.test_client()
+    get_response = client.get("/remove-item")
+    assert get_response.status_code == 200
+    assert "Catan" in get_response.get_data(as_text=True)
+    assert "Ticket to Ride" in get_response.get_data(as_text=True)
+
+    product_id = get_db().execute(
+        "SELECT product_id FROM products WHERE name = ?", ("Catan",)
+    ).fetchone()[0]
+    post_response = client.post("/remove-item", data={"product_id": str(product_id)})
+    assert post_response.status_code == 302
+    assert post_response.headers["Location"].endswith("/")
+
+    with app.app_context():
+        remaining = get_db().execute(
+            "SELECT name FROM products ORDER BY name"
+        ).fetchall()
+
+    assert [row[0] for row in remaining] == ["Ticket to Ride"]
+
+
 def test_remove_item_deletes_product_and_inventory(tmp_path):
     # Removing an item should also remove its related inventory record.
     database_path = tmp_path / "inventory.db"
