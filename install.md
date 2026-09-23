@@ -87,7 +87,6 @@ Then initialize the database:
 flask --app app init-db
 ```
 
-<!-- This default account is created automatically for the login flow. -->
 This also creates the default admin account:
 
 ```text
@@ -127,7 +126,7 @@ not connected
 
 Start Flask so it can be reached from your server:
 
-<!-- Bind to 0.0.0.0 so the VM is reachable from other machines on the network. -->
+
 ```bash
 flask --app app run --host 0.0.0.0 --port 5000
 ```
