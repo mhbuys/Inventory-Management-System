@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Inventory actions">
+        <a class="button button-primary" href="{{ url_for('add_item_page') }}">Add item</a>
+        <a class="button button-danger" href="{{ url_for('remove_item_page') }}">Remove item</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page-shell">
+    <section class="inventory-panel" aria-labelledby="inventory-title">
+        <div class="inventory-heading">
+            <div>
+                <p class="eyebrow">Overview</p>
+                <h1 id="inventory-title">Inventory</h1>
+                <p class="muted">Current stock from the inventory database.</p>
+            </div>
+            <span class="status">{{ inventory|length }} items tracked</span>
+        </div>
+
+        <div class="inventory-list">
+            {% for item in inventory %}
+            <article class="inventory-row">
+                <div>
+                    <strong>{{ item["name"] }}</strong>
+                    <span class="muted">
+                        {{ item["category"]|replace("_", " ")|title }}
+                        | ${{ "%.2f"|format(item["price"]) }}
+                    </span>
+                </div>
+
+                {% if item["quantity"] <= item["low_stock_threshold"] %}
+                <span class="status status-low">
+                    Low stock: {{ item["quantity"] }} units
+                </span>
+                {% else %}
+                <span class="status">
+                    {{ item["quantity"] }} units available
+                </span>
+                {% endif %}
+            </article>
+            {% else %}
+            <p class="muted">No active inventory items found.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

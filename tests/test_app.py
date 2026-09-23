@@ -146,6 +146,21 @@ def test_login_requires_authentication(tmp_path):
     assert response.headers["Location"] == "/login"
 
 
+def test_login_page_is_reachable_without_authentication(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    response = app.test_client().get("/login", follow_redirects=False)
+
+    assert response.status_code == 200
+    assert b"Please log in" in response.data
+
+
 # This verifies the seeded admin login succeeds for the browser and protected routes.
 def test_default_admin_user_can_login(tmp_path):
     database_path = tmp_path / "inventory.db"
@@ -165,3 +180,117 @@ def test_default_admin_user_can_login(tmp_path):
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/"
+
+
+def test_homepage_displays_database_inventory(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        add_item("Catan", "board_game", price=34.99, quantity=5)
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    response = client.get("/")
+    page = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Catan" in page
+    assert "5 units available" in page
+    assert "1 items tracked" in page
+    assert "Sample item" not in page
+
+
+# Verify that the add-item page is protected but reachable after login.
+def test_add_item_page_requires_authentication(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    response = client.get("/add-item", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    response = client.get("/add-item")
+
+    assert response.status_code == 200
+    assert b"Add Item" in response.data
+
+
+# Verify that the browser can remove a selected database item through the route.
+def test_remove_item_page_deletes_selected_inventory_item(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=5)
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+
+    page = client.get("/remove-item")
+    assert page.status_code == 200
+    assert b"Catan" in page.data
+
+    response = client.post("/remove-item", data={"product_id": product_id})
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/"
+    with app.app_context():
+        assert (
+            get_db()
+            .execute("SELECT 1 FROM products WHERE product_id = ?", (product_id,))
+            .fetchone()
+            is None
+        )
+
+
+# Invalid form values should return a client error instead of reaching the database.
+def test_remove_item_rejects_invalid_product_id(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+
+    response = client.post("/remove-item", data={"product_id": "not-a-number"})
+
+    assert response.status_code == 400
+    assert b"Invalid inventory item" in response.data
+
+
+# Logging out should remove access to protected pages from the current client.
+def test_logout_clears_authentication_session(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    response = client.get("/logout", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+    assert client.get("/", follow_redirects=False).headers["Location"] == "/login"

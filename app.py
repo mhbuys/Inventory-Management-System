@@ -5,7 +5,8 @@ from functools import wraps
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
-from database import close_db, get_db, init_db
+from database import close_db, get_db, init_db, query_db
+from items import remove_item, add_item
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -45,7 +46,16 @@ def create_app(test_config=None):
     @app.get("/")
     @login_required
     def inventory_page():
-        return render_template("base.html")
+        inventory = query_db("""
+            SELECT products.product_id, products.name, products.category,
+                   products.price, inventory.quantity,
+                   inventory.low_stock_threshold
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            WHERE products.status = 'active'
+            ORDER BY products.name COLLATE NOCASE
+            """)
+        return render_template("inventory.html", inventory=inventory)
 
     # Render the login screen and redirect already-signed-in users home.
     @app.get("/login")
@@ -89,7 +99,7 @@ def create_app(test_config=None):
     # Mark the session as expired before sending the user back to login.
     @app.before_request
     def handle_expired_session():
-        if request.endpoint in {"login", "logout"}:
+        if request.endpoint in {"login", "login_page", "logout"}:
             return None
         if request.path.startswith("/static"):
             return None
@@ -97,11 +107,44 @@ def create_app(test_config=None):
             session["expired"] = True
             return redirect(url_for("login_page"))
 
-    # Protect the add-item page the same way as the main inventory view.
-    @app.get("/add-item")
+    # Protect the add-item page and accept new inventory submissions.
+    @app.route("/add-item", methods=["GET", "POST"])
     @login_required
     def add_item_page():
+        if request.method == "POST":
+            add_item(
+                name=request.form["name"],
+                category=request.form["category"],
+                description=request.form.get("description") or None,
+                price=float(request.form.get("price") or 0),
+                quantity=int(request.form.get("quantity") or 0),
+            )
+            return redirect(url_for("inventory_page"))
         return render_template("add_item.html")
+
+    # Show active items that can be selected for removal.
+    @app.get("/remove-item")
+    @login_required
+    def remove_item_page():
+        items = query_db("""
+            SELECT product_id, name
+            FROM products
+            WHERE status = 'active'
+            ORDER BY name COLLATE NOCASE
+            """)
+        return render_template("remove_item.html", items=items)
+
+    # Delete the selected item and return to the current inventory list.
+    @app.post("/remove-item")
+    @login_required
+    def remove_item_action():
+        try:
+            product_id = int(request.form.get("product_id", ""))
+            remove_item(product_id)
+        except (TypeError, ValueError):
+            return "Invalid inventory item", 400
+
+        return redirect(url_for("inventory_page"))
 
     # CLI helper to initialize the SQLite schema.
     @app.cli.command("init-db")
