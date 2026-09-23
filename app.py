@@ -1,8 +1,6 @@
 import os
-from functools import wraps
 
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash
+from flask import Flask, jsonify, render_template
 
 from database import close_db, get_db, init_db
 
@@ -17,7 +15,6 @@ def create_app(test_config=None):
     )
     app.config.from_mapping(
         DATABASE=os.path.join(app.instance_path, "inventory.db"),
-        SECRET_KEY="inventory-management-system-secret",
     )
 
     # Load environment settings when no explicit test config is supplied.
@@ -30,58 +27,18 @@ def create_app(test_config=None):
     os.makedirs(app.instance_path, exist_ok=True)
     app.teardown_appcontext(close_db)
 
-    def login_required(view):
-        @wraps(view)
-        def wrapped_view(*args, **kwargs):
-            if not session.get("user_id"):
-                return redirect(url_for("login_page"))
-            return view(*args, **kwargs)
-
-        return wrapped_view
-
     @app.get("/")
-    @login_required
     def inventory_page():
         return render_template("base.html")
 
     @app.get("/login")
     def login_page():
-        if session.get("user_id"):
-            return redirect(url_for("inventory_page"))
-        return render_template("login.html", error=None)
-
-    @app.post("/login")
-    def login():
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-
-        user = (
-            get_db()
-            .execute(
-                "SELECT user_id, username, password_hash FROM users WHERE username = ?",
-                (username,),
-            )
-            .fetchone()
-        )
-
-        if user and check_password_hash(user["password_hash"], password):
-            session.clear()
-            session["user_id"] = user["user_id"]
-            session["username"] = user["username"]
-            return redirect(url_for("inventory_page"))
-
-        return render_template("login.html", error="Invalid username or password"), 401
-
-    @app.get("/logout")
-    def logout():
-        session.clear()
-        return redirect(url_for("login_page"))
-
+        return render_template("login.html")
+    
     @app.get("/add-item")
-    @login_required
     def add_item_page():
-        return render_template("add_item.html")
-
+        return render_template("add_item.html")  
+   
     # CLI helper to initialize the SQLite schema.
     @app.cli.command("init-db")
     def init_db_command():

@@ -1,7 +1,6 @@
 import sqlite3
 
 from flask import current_app, g
-from werkzeug.security import generate_password_hash
 
 
 # Open a SQLite connection for the current request or app context.
@@ -32,10 +31,4 @@ def init_db():
     database = get_db()
     with current_app.open_resource("schema.sql") as schema_file:
         database.executescript(schema_file.read().decode("utf-8"))
-
-    # Seed the default admin account used for login.
-    database.execute(
-        "INSERT OR IGNORE INTO users (username, password_hash) VALUES (?, ?)",
-        ("admin", generate_password_hash("admin")),
-    )
     database.commit()

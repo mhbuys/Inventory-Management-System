@@ -30,7 +30,8 @@ Run the following commands in the Ubuntu terminal to install everything needed f
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3 python3-venv python3-pip git sqlite3
+sudo apt install -y python3 python3-venv python3-pip git sqlite3 
+pip install -U pytest
 ```
 
 This installs Python, the virtual environment tools, pip, Git, and SQLite.
@@ -85,13 +86,6 @@ Then initialize the database:
 
 ```bash
 flask --app app init-db
-```
-
-This also creates the default admin account:
-
-```text
-username: admin
-password: admin
 ```
 
 The SQLite database will be stored at:

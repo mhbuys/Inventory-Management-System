@@ -108,22 +108,20 @@
                     <h1>Please log in to continue .</h1>
                     <p class="muted">A Placeholder.</p>
                 </div>
-                <!-- Auth form tied to the Flask login route. -->
+                <!-- Presentation-only form area for the design assignment. -->
                 <div class="login-form">
                     <p class="eyebrow">Team access</p>
                     <h2 id="login-title">Welcome.</h2>
                     <p class="muted">Use your account details to continue.</p>
-                    {% if error %}
-                    <p class="muted" style="color: #a84848;">{{ error }}</p>
-                    {% endif %}
-                    <form action="{{ url_for('login') }}" method="post">
+                    <!-- No authentication handler is connected yet. -->
+                    <form action="" method="get">
                         <label for="username">Username</label>
-                        <input id="username" name="username" type="text" autocomplete="username" required>
+                        <input id="username" name="username" type="text" autocomplete="username">
                         <label for="password">Password</label>
-                        <input id="password" name="password" type="password" autocomplete="current-password" required>
+                        <input id="password" name="password" type="password" autocomplete="current-password">
                         <button class="button" type="submit">Log in</button>
                     </form>
-                    <a class="back-link" href="{{ url_for('login_page') }}">Return to inventory preview</a>
+                    <a class="back-link" href="base.html">Return to inventory preview</a>
                 </div>
             </section>
         </main>
