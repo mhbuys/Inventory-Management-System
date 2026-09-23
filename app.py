@@ -5,7 +5,7 @@ from functools import wraps
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
 
-from database import close_db, get_db, init_db
+from database import close_db, get_db, init_db, query_db
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -45,7 +45,16 @@ def create_app(test_config=None):
     @app.get("/")
     @login_required
     def inventory_page():
-        return render_template("base.html")
+        inventory = query_db("""
+            SELECT products.product_id, products.name, products.category,
+                   products.price, inventory.quantity,
+                   inventory.low_stock_threshold
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            WHERE products.status = 'active'
+            ORDER BY products.name COLLATE NOCASE
+            """)
+        return render_template("inventory.html", inventory=inventory)
 
     # Render the login screen and redirect already-signed-in users home.
     @app.get("/login")
@@ -89,7 +98,7 @@ def create_app(test_config=None):
     # Mark the session as expired before sending the user back to login.
     @app.before_request
     def handle_expired_session():
-        if request.endpoint in {"login", "logout"}:
+        if request.endpoint in {"login", "login_page", "logout"}:
             return None
         if request.path.startswith("/static"):
             return None

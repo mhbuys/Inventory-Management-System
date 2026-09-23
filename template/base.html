@@ -130,45 +130,6 @@
         </style>
     </head>
     <body>
-        <!-- ### Design: universal top banner shared by future pages. -->
-        <header class="top-banner">
-            <p class="brand">Inventory Management System</p>
-            <nav class="banner-actions" aria-label="Inventory actions">
-                <a class="button button-primary" href="/add-item">Add item</a>
-                <a class="button button-danger" href="#remove-item">Remove item</a>
-                <!-- Log out clears the user session so the app remains secured. -->
-                <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
-            </nav>
-        </header>
-
-        <main class="page-shell">
-            <!-- ### Design: inventory is the basic home view after login. -->
-            <section class="inventory-panel" aria-labelledby="inventory-title">
-                <div class="inventory-heading">
-                    <div>
-                        <p class="eyebrow">Overview</p>
-                        <h1 id="inventory-title">Inventory</h1>
-                        <p class="muted">Placeholder text for the inventory description.</p>
-                    </div>
-                    <span class="status">3 items tracked</span>
-                </div>
-                <div class="inventory-list">
-                    <article class="inventory-row">
-                        <div><strong>Sample item</strong><span class="muted">General stock</span></div>
-                        <div class="item-actions"><a class="button button-primary" href="#add-item">Add item</a><a class="button button-danger" href="#remove-item">Remove item</a></div>
-                    </article>
-                    <article class="inventory-row">
-                        <div><strong>Office supplies</strong><span class="muted">12 units available</span></div>
-                        <span class="status">In stock</span>
-                    </article>
-                    <article class="inventory-row">
-                        <div><strong>Equipment</strong><span class="muted">Needs review</span></div>
-                        <span class="status">Attention</span>
-                    </article>
-                </div>
-            </section>
-        </main>
-
         {% block content %}{% endblock %}
     </body>
 </html>

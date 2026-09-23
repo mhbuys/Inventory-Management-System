@@ -146,6 +146,21 @@ def test_login_requires_authentication(tmp_path):
     assert response.headers["Location"] == "/login"
 
 
+def test_login_page_is_reachable_without_authentication(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    response = app.test_client().get("/login", follow_redirects=False)
+
+    assert response.status_code == 200
+    assert b"Please log in" in response.data
+
+
 # This verifies the seeded admin login succeeds for the browser and protected routes.
 def test_default_admin_user_can_login(tmp_path):
     database_path = tmp_path / "inventory.db"
@@ -165,3 +180,25 @@ def test_default_admin_user_can_login(tmp_path):
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/"
+
+
+def test_homepage_displays_database_inventory(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        add_item("Catan", "board_game", price=34.99, quantity=5)
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    response = client.get("/")
+    page = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Catan" in page
+    assert "5 units available" in page
+    assert "1 items tracked" in page
+    assert "Sample item" not in page
