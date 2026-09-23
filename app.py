@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from functools import wraps
 
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
@@ -18,6 +19,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         DATABASE=os.path.join(app.instance_path, "inventory.db"),
         SECRET_KEY="inventory-management-system-secret",
+        PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
     )
 
     # Load environment settings when no explicit test config is supplied.
@@ -30,6 +32,7 @@ def create_app(test_config=None):
     os.makedirs(app.instance_path, exist_ok=True)
     app.teardown_appcontext(close_db)
 
+    # Guard app pages so only logged-in users can reach the inventory views.
     def login_required(view):
         @wraps(view)
         def wrapped_view(*args, **kwargs):
@@ -44,12 +47,16 @@ def create_app(test_config=None):
     def inventory_page():
         return render_template("base.html")
 
+    # Render the login screen and redirect already-signed-in users home.
     @app.get("/login")
     def login_page():
         if session.get("user_id"):
             return redirect(url_for("inventory_page"))
-        return render_template("login.html", error=None)
+        return render_template(
+            "login.html", error=None, expired=session.pop("expired", False)
+        )
 
+    # Validate the posted username and password against the seeded admin account.
     @app.post("/login")
     def login():
         username = request.form.get("username", "").strip()
@@ -66,17 +73,31 @@ def create_app(test_config=None):
 
         if user and check_password_hash(user["password_hash"], password):
             session.clear()
+            session.permanent = True
             session["user_id"] = user["user_id"]
             session["username"] = user["username"]
             return redirect(url_for("inventory_page"))
 
         return render_template("login.html", error="Invalid username or password"), 401
 
+    # Ensure the session is cleared when the user logs out.
     @app.get("/logout")
     def logout():
         session.clear()
         return redirect(url_for("login_page"))
 
+    # Mark the session as expired before sending the user back to login.
+    @app.before_request
+    def handle_expired_session():
+        if request.endpoint in {"login", "logout"}:
+            return None
+        if request.path.startswith("/static"):
+            return None
+        if not session.get("user_id") and request.endpoint is not None:
+            session["expired"] = True
+            return redirect(url_for("login_page"))
+
+    # Protect the add-item page the same way as the main inventory view.
     @app.get("/add-item")
     @login_required
     def add_item_page():

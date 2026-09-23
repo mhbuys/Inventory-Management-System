@@ -114,15 +114,22 @@
                     <h2 id="login-title">Welcome.</h2>
                     <p class="muted">Use your account details to continue.</p>
                     {% if error %}
+                    <!-- Show a brief invalid-login message returned by the route. -->
                     <p class="muted" style="color: #a84848;">{{ error }}</p>
                     {% endif %}
+                    {% if expired %}
+                    <!-- Session timeout message shown when the 30-minute inactivity limit ends the login. -->
+                    <p class="muted" style="color: #a84848;">Your session has expired. Please log in again.</p>
+                    {% endif %}
                     <form action="{{ url_for('login') }}" method="post">
+                        <!-- Username and password are posted to the Flask auth handler. -->
                         <label for="username">Username</label>
                         <input id="username" name="username" type="text" autocomplete="username" required>
                         <label for="password">Password</label>
                         <input id="password" name="password" type="password" autocomplete="current-password" required>
                         <button class="button" type="submit">Log in</button>
                     </form>
+                    <!-- The return link keeps the basic page flow consistent. -->
                     <a class="back-link" href="{{ url_for('login_page') }}">Return to inventory preview</a>
                 </div>
             </section>

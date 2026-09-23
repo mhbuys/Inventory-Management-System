@@ -126,11 +126,12 @@ not connected
 
 Start Flask so it can be reached from your server:
 
+
 ```bash
 flask --app app run --host 0.0.0.0 --port 5000
 ```
 
-Replace `(your server IP)` with the actual IP address of the machine running the app.
+Replace `(0.0.0.0)` with the actual IP address of the machine running the app.
 
 Open the server from another computer using:
 

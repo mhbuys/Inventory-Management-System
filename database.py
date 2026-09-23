@@ -33,7 +33,7 @@ def init_db():
     with current_app.open_resource("schema.sql") as schema_file:
         database.executescript(schema_file.read().decode("utf-8"))
 
-    # Seed the default admin account used for login.
+    # Seed the default admin account used for the login flow.
     database.execute(
         "INSERT OR IGNORE INTO users (username, password_hash) VALUES (?, ?)",
         ("admin", generate_password_hash("admin")),
