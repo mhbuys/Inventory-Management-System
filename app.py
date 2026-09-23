@@ -6,6 +6,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 from werkzeug.security import check_password_hash
 
 from database import close_db, get_db, init_db
+from items import add_item, remove_item
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -45,11 +46,50 @@ def create_app(test_config=None):
     @app.get("/")
     @login_required
     def inventory_page():
-        return render_template("base.html")
+        inventory = get_db().execute(
+            """
+            SELECT products.name, products.category, products.description,
+                   products.price, products.status, inventory.quantity,
+                   inventory.low_stock_threshold
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            ORDER BY products.name
+            """
+        ).fetchall()
+        return render_template("base.html", inventory=inventory)
 
     # Render the login screen and redirect already-signed-in users home.
     @app.get("/login")
     def login_page():
+        return render_template("login.html")
+    
+    @app.route("/add-item", methods=["GET", "POST"])
+    def add_item_page():
+        if request.method == "POST":
+            add_item(
+                name=request.form["name"],
+                category=request.form["category"],
+                description=request.form.get("description") or None,
+                price=float(request.form.get("price") or 0),
+                quantity=int(request.form.get("quantity") or 0),
+            )
+            return redirect(url_for("inventory_page"))
+
+        return render_template("add_item.html")
+
+    @app.route("/remove-item", methods=["GET", "POST"])
+    def remove_item_page():
+        items = get_db().execute(
+            "SELECT product_id, name FROM products ORDER BY name"
+        ).fetchall()
+
+        if request.method == "POST":
+            product_id = int(request.form["product_id"])
+            remove_item(product_id)
+            return redirect(url_for("inventory_page"))
+
+        return render_template("remove_item.html", items=items)
+
         if session.get("user_id"):
             return redirect(url_for("inventory_page"))
         return render_template(

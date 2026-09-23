@@ -108,6 +108,11 @@
 
             /* ### Design: rows make item names, details, and actions easy to scan. */
             .inventory-list { border-top: 1px solid var(--line); }
+            .inventory-table { width: 100%; border-collapse: collapse; text-align: left; }
+            .inventory-table th, .inventory-table td { padding: .9rem .6rem; border-bottom: 1px solid var(--line); }
+            .inventory-table th { color: var(--muted); font: 700 .75rem Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+            .inventory-table td { vertical-align: top; }
+            .inventory-table .numeric { text-align: right; white-space: nowrap; }
             .inventory-row {
                 display: flex;
                 align-items: center;
@@ -119,6 +124,7 @@
 
             .inventory-row strong { display: block; margin-bottom: .25rem; }
             .status { color: var(--accent); font: 700 .75rem Arial, sans-serif; text-transform: uppercase; }
+            .status-attention { color: var(--danger); }
 
             /* ### Design: stack content on smaller screens to prevent cramped controls. */
             @media (max-width: 760px) {
@@ -135,6 +141,8 @@
             <p class="brand">Inventory Management System</p>
             <nav class="banner-actions" aria-label="Inventory actions">
                 <a class="button button-primary" href="/add-item">Add item</a>
+                <a class="button button-danger" href="/remove-item">Remove item</a>
+                <a class="button button-quiet" href="#logout">Log out</a>
                 <a class="button button-danger" href="#remove-item">Remove item</a>
                 <!-- Log out clears the user session so the app remains secured. -->
                 <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
@@ -148,23 +156,50 @@
                     <div>
                         <p class="eyebrow">Overview</p>
                         <h1 id="inventory-title">Inventory</h1>
-                        <p class="muted">Placeholder text for the inventory description.</p>
+                        <p class="muted">Current stock from the inventory database.</p>
                     </div>
-                    <span class="status">3 items tracked</span>
+                    <span class="status">{{ inventory|length }} items tracked</span>
                 </div>
-                <div class="inventory-list">
-                    <article class="inventory-row">
-                        <div><strong>Sample item</strong><span class="muted">General stock</span></div>
-                        <div class="item-actions"><a class="button button-primary" href="#add-item">Add item</a><a class="button button-danger" href="#remove-item">Remove item</a></div>
-                    </article>
-                    <article class="inventory-row">
-                        <div><strong>Office supplies</strong><span class="muted">12 units available</span></div>
-                        <span class="status">In stock</span>
-                    </article>
-                    <article class="inventory-row">
-                        <div><strong>Equipment</strong><span class="muted">Needs review</span></div>
-                        <span class="status">Attention</span>
-                    </article>
+                <div class="inventory-list" role="region" aria-label="Inventory table" tabindex="0">
+                    <table class="inventory-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Item</th>
+                                <th scope="col">Category</th>
+                                <th scope="col">Price</th>
+                                <th scope="col">Quantity</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in inventory %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item["name"] }}</strong>
+                                        {% if item["description"] %}
+                                            <span class="muted">{{ item["description"] }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item["category"].replace("_", " ")|title }}</td>
+                                    <td class="numeric">${{ "%.2f"|format(item["price"]) }}</td>
+                                    <td class="numeric">{{ item["quantity"] }}</td>
+                                    <td>
+                                        {% if item["status"] != "active" %}
+                                            <span class="status status-attention">{{ item["status"]|title }}</span>
+                                        {% elif item["quantity"] <= item["low_stock_threshold"] %}
+                                            <span class="status status-attention">Low stock</span>
+                                        {% else %}
+                                            <span class="status">In stock</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="muted">No inventory items have been added yet.</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </main>
