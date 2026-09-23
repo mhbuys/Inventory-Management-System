@@ -6,6 +6,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 from werkzeug.security import check_password_hash
 
 from database import close_db, get_db, init_db, query_db
+from items import remove_item, add_item
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -111,6 +112,30 @@ def create_app(test_config=None):
     @login_required
     def add_item_page():
         return render_template("add_item.html")
+
+    # Show active items that can be selected for removal.
+    @app.get("/remove-item")
+    @login_required
+    def remove_item_page():
+        items = query_db("""
+            SELECT product_id, name
+            FROM products
+            WHERE status = 'active'
+            ORDER BY name COLLATE NOCASE
+            """)
+        return render_template("remove_item.html", items=items)
+
+    # Delete the selected item and return to the current inventory list.
+    @app.post("/remove-item")
+    @login_required
+    def remove_item_action():
+        try:
+            product_id = int(request.form.get("product_id", ""))
+            remove_item(product_id)
+        except (TypeError, ValueError):
+            return "Invalid inventory item", 400
+
+        return redirect(url_for("inventory_page"))
 
     # CLI helper to initialize the SQLite schema.
     @app.cli.command("init-db")
