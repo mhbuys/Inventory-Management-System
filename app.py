@@ -30,7 +30,17 @@ def create_app(test_config=None):
 
     @app.get("/")
     def inventory_page():
-        return render_template("base.html")
+        inventory = get_db().execute(
+            """
+            SELECT products.name, products.category, products.description,
+                   products.price, products.status, inventory.quantity,
+                   inventory.low_stock_threshold
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            ORDER BY products.name
+            """
+        ).fetchall()
+        return render_template("base.html", inventory=inventory)
 
     @app.get("/login")
     def login_page():

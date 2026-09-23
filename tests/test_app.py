@@ -108,6 +108,32 @@ def test_add_item_form_creates_item_and_redirects(tmp_path):
     assert tuple(item) == ("Catan", 5)
 
 
+def test_inventory_page_displays_database_items(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        add_item(
+            "Catan",
+            "board_game",
+            description="A strategy game",
+            price=34.99,
+            quantity=1,
+            low_stock_threshold=2,
+        )
+
+    response = app.test_client().get("/")
+
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "Catan" in page
+    assert "A strategy game" in page
+    assert "$34.99" in page
+    assert "Low stock" in page
+    assert "Sample item" not in page
+
+
 def test_remove_item_deletes_product_and_inventory(tmp_path):
     # Removing an item should also remove its related inventory record.
     database_path = tmp_path / "inventory.db"
