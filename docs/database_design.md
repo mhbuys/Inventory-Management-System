@@ -13,6 +13,7 @@ The database will support:
 - Permission levels
 - Reorder history
 - Event logging
+- Two-factor authentication
 
 ## Proposed Tables
 
@@ -106,6 +107,18 @@ Records important activity in the system.
 | description | Description of the event |
 | date_time | Date and time the event occurred |
 
+### 9. user_2fa
+
+Stores two-factor authentication information for user accounts.
+
+| Column | Description |
+|---|---|
+| user_id | Primary Key and Foreign Key referencing users |
+| secret_key | Secret key used to generate authentication codes |
+| is_enabled | Indicates whether 2FA is enabled for the user |
+| backup_codes | Backup recovery codes for account access |
+| updated_at | Date and time the 2FA information was last updated |
+
 ## Table Relationships
 
 - `products` links to `inventory` using `product_id`.
@@ -114,7 +127,8 @@ Records important activity in the system.
 - `users` links to `inventory_transactions` using `user_id`.
 - `users` links to `event_logs` using `user_id`.
 - `users` and `roles` are connected through the `user_roles` link table.
-
+- `users` links to `user_2fa` using `user_id`.
+  
 ## Link Table
 
 The `user_roles` table is a link table between the `users` and `roles` tables.
