@@ -68,10 +68,12 @@
 
 <body>
 
+<!-- Shared application header identifies the inventory system. -->
 <header>
     <h2>Inventory Management System</h2>
 </header>
 
+<!-- The form submits the selected product ID to Flask for deletion. -->
 <main>
     <h1>Remove Item</h1>
 
@@ -79,6 +81,7 @@
         <p>
             <label for="product_id">Item</label><br>
             <select id="product_id" name="product_id" required>
+                <!-- Flask fills these options from active database products. -->
                 {% for item in items %}
                     <option value="{{ item['product_id'] }}">{{ item['name'] }}</option>
                 {% endfor %}
@@ -86,6 +89,7 @@
         </p>
 
         <div class="actions">
+            <!-- The destructive action is visually separated from canceling. -->
             <button class="danger" type="submit">Remove</button>
             <a href="/">Cancel</a>
         </div>
