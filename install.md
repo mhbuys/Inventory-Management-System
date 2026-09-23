@@ -30,8 +30,7 @@ Run the following commands in the Ubuntu terminal to install everything needed f
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3 python3-venv python3-pip git sqlite3 
-pip install -U pytest
+sudo apt install -y python3 python3-venv python3-pip git sqlite3
 ```
 
 This installs Python, the virtual environment tools, pip, Git, and SQLite.
@@ -88,6 +87,13 @@ Then initialize the database:
 flask --app app init-db
 ```
 
+This also creates the default admin account:
+
+```text
+username: admin
+password: admin
+```
+
 The SQLite database will be stored at:
 
 ```text
@@ -120,11 +126,12 @@ not connected
 
 Start Flask so it can be reached from your server:
 
+
 ```bash
 flask --app app run --host 0.0.0.0 --port 5000
 ```
 
-Replace `(your server IP)` with the actual IP address of the machine running the app.
+Replace `(0.0.0.0)` with the actual IP address of the machine running the app.
 
 Open the server from another computer using:
 

@@ -195,10 +195,14 @@ def test_update_quantity_changes_inventory_quantity(tmp_path):
         init_db()
         product_id = add_item("Catan", "board_game", quantity=5)
         update_quantity(product_id, 12)
-        quantity = get_db().execute(
-            "SELECT quantity FROM inventory WHERE product_id = ?",
-            (product_id,),
-        ).fetchone()[0]
+        quantity = (
+            get_db()
+            .execute(
+                "SELECT quantity FROM inventory WHERE product_id = ?",
+                (product_id,),
+            )
+            .fetchone()[0]
+        )
 
     assert quantity == 12
 
@@ -217,3 +221,41 @@ def test_update_quantity_rejects_negative_quantity(tmp_path):
             assert str(error) == "Quantity cannot be negative"
         else:
             raise AssertionError("Expected negative quantity to be rejected")
+
+
+# Auth tests confirm that protected pages redirect and the default admin account works.
+def test_login_requires_authentication(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    response = client.get("/", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+
+
+# This verifies the seeded admin login succeeds for the browser and protected routes.
+def test_default_admin_user_can_login(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    response = client.post(
+        "/login",
+        data={"username": "admin", "password": "admin"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/"
