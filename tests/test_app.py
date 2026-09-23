@@ -202,3 +202,33 @@ def test_homepage_displays_database_inventory(tmp_path):
     assert "5 units available" in page
     assert "1 items tracked" in page
     assert "Sample item" not in page
+
+
+def test_remove_item_page_deletes_selected_inventory_item(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=5)
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+
+    page = client.get("/remove-item")
+    assert page.status_code == 200
+    assert b"Catan" in page.data
+
+    response = client.post("/remove-item", data={"product_id": product_id})
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/"
+    with app.app_context():
+        assert (
+            get_db()
+            .execute("SELECT 1 FROM products WHERE product_id = ?", (product_id,))
+            .fetchone()
+            is None
+        )
