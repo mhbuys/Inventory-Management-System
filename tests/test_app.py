@@ -149,9 +149,11 @@ def test_remove_item_page_lists_items_and_removes_selected_item(tmp_path):
     assert "Catan" in get_response.get_data(as_text=True)
     assert "Ticket to Ride" in get_response.get_data(as_text=True)
 
-    product_id = get_db().execute(
-        "SELECT product_id FROM products WHERE name = ?", ("Catan",)
-    ).fetchone()[0]
+    with app.app_context():
+        product_id = get_db().execute(
+            "SELECT product_id FROM products WHERE name = ?", ("Catan",)
+        ).fetchone()[0]
+
     post_response = client.post("/remove-item", data={"product_id": str(product_id)})
     assert post_response.status_code == 302
     assert post_response.headers["Location"].endswith("/")
