@@ -72,6 +72,42 @@ def test_add_item_creates_product_and_inventory(tmp_path):
     assert tuple(item) == ("Catan", 34.99, 5)
 
 
+def test_add_item_form_creates_item_and_redirects(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    response = client.post(
+        "/add-item",
+        data={
+            "name": "Catan",
+            "category": "board_game",
+            "description": "A strategy game",
+            "price": "34.99",
+            "quantity": "5",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+    with app.app_context():
+        item = get_db().execute(
+            """
+            SELECT products.name, inventory.quantity
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            WHERE products.name = ?
+            """,
+            ("Catan",),
+        ).fetchone()
+
+    assert tuple(item) == ("Catan", 5)
+
+
 def test_remove_item_deletes_product_and_inventory(tmp_path):
     # Removing an item should also remove its related inventory record.
     database_path = tmp_path / "inventory.db"

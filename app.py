@@ -1,8 +1,9 @@
 import os
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 from database import close_db, get_db, init_db
+from items import add_item
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -35,8 +36,18 @@ def create_app(test_config=None):
     def login_page():
         return render_template("login.html")
     
-    @app.get("/add-item")
+    @app.route("/add-item", methods=["GET", "POST"])
     def add_item_page():
+        if request.method == "POST":
+            add_item(
+                name=request.form["name"],
+                category=request.form["category"],
+                description=request.form.get("description") or None,
+                price=float(request.form.get("price") or 0),
+                quantity=int(request.form.get("quantity") or 0),
+            )
+            return redirect(url_for("inventory_page"))
+
         return render_template("add_item.html")  
    
     # CLI helper to initialize the SQLite schema.
