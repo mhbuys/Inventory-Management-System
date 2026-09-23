@@ -129,6 +129,7 @@ def test_update_quantity_rejects_negative_quantity(tmp_path):
             raise AssertionError("Expected negative quantity to be rejected")
 
 
+# Auth tests confirm that protected pages redirect and the default admin account works.
 def test_login_requires_authentication(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
@@ -145,6 +146,7 @@ def test_login_requires_authentication(tmp_path):
     assert response.headers["Location"] == "/login"
 
 
+# This verifies the seeded admin login succeeds for the browser and protected routes.
 def test_default_admin_user_can_login(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
