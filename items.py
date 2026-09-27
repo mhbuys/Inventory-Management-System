@@ -77,6 +77,7 @@ def adjust_quantity(product_id, quantity_change):
         raise ValueError("Quantity change must be a nonzero integer")
 
     database = get_db()
+    # Enforce the nonnegative result in SQL so concurrent updates remain safe.
     result = database.execute(
         """
         UPDATE inventory
