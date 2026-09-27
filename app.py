@@ -6,7 +6,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session, u
 from werkzeug.security import check_password_hash
 
 from database import close_db, get_db, init_db, query_db
-from items import remove_item, add_item
+from items import adjust_quantity, remove_item, add_item
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -56,6 +56,22 @@ def create_app(test_config=None):
             ORDER BY products.name COLLATE NOCASE
             """)
         return render_template("inventory.html", inventory=inventory)
+
+    # Adjust stock from the inventory page.
+    @app.post("/adjust-stock")
+    @login_required
+    def adjust_stock():
+        try:
+            # The dialog sends a signed amount: positive for adding and negative for removing.
+            product_id = int(request.form.get("product_id", ""))
+            quantity_change = int(request.form.get("quantity_change", ""))
+            if quantity_change == 0:
+                raise ValueError("Invalid quantity change")
+            adjust_quantity(product_id, quantity_change)
+        except (TypeError, ValueError) as error:
+            return str(error), 400
+
+        return redirect(url_for("inventory_page"))
 
     # Render the login screen and redirect already-signed-in users home.
     @app.get("/login")

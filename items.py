@@ -60,11 +60,38 @@ def update_quantity(product_id, quantity):
         raise ValueError("Quantity cannot be negative")
 
     database = get_db()
+    # Apply the change only when the resulting quantity remains valid.
     result = database.execute(
         "UPDATE inventory SET quantity = ? WHERE product_id = ?",
         (quantity, product_id),
     )
     if result.rowcount == 0:
         raise ValueError(f"No item found with product ID {product_id}")
+
+    database.commit()
+
+
+def adjust_quantity(product_id, quantity_change):
+    """Add or remove units without allowing stock to become negative."""
+    if not isinstance(quantity_change, int) or quantity_change == 0:
+        raise ValueError("Quantity change must be a nonzero integer")
+
+    database = get_db()
+    # Enforce the nonnegative result in SQL so concurrent updates remain safe.
+    result = database.execute(
+        """
+        UPDATE inventory
+        SET quantity = quantity + ?
+        WHERE product_id = ? AND quantity + ? >= 0
+        """,
+        (quantity_change, product_id, quantity_change),
+    )
+    if result.rowcount == 0:
+        item_exists = database.execute(
+            "SELECT 1 FROM inventory WHERE product_id = ?", (product_id,)
+        ).fetchone()
+        if item_exists is None:
+            raise ValueError(f"No item found with product ID {product_id}")
+        raise ValueError("Stock cannot be negative")
 
     database.commit()

@@ -63,9 +63,46 @@
 
             /* ### Design: color variants separate primary, destructive, and quiet actions. */
             .button:hover, .button:focus-visible { border-color: #8eb8b1; }
+            .button:disabled {
+                cursor: not-allowed;
+                opacity: .45;
+            }
             .button-primary { color: #ffffff; background: var(--accent); }
             .button-danger { color: #ffffff; background: var(--danger); }
             .button-quiet { color: #ffffff; background: transparent; border-color: #8db2ae; }
+
+            .quantity-dialog[hidden] { display: none; }
+            .quantity-dialog {
+                position: fixed;
+                inset: 0;
+                display: grid;
+                place-items: center;
+                padding: 1rem;
+                background: rgba(36, 49, 59, .45);
+            }
+            .quantity-dialog-panel {
+                width: min(100%, 24rem);
+                padding: 1.5rem;
+                background: var(--surface);
+                box-shadow: 0 16px 40px rgba(36, 49, 59, .2);
+            }
+            .quantity-dialog-panel h2 { margin-bottom: .5rem; }
+            .quantity-dialog-panel label {
+                display: block;
+                margin-bottom: .35rem;
+                font-weight: 700;
+            }
+            .quantity-dialog-panel input {
+                width: 100%;
+                margin-bottom: 1rem;
+                border: 1px solid var(--line);
+                padding: .65rem;
+            }
+            .quantity-dialog-panel .item-actions { justify-content: flex-end; }
+            .quantity-dialog-panel .button-quiet {
+                color: var(--ink);
+                border-color: var(--line);
+            }
 
             /* ### Design: keep the inventory view focused on daily stock work. */
             .page-shell {

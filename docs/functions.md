@@ -50,6 +50,18 @@ This document describes the current item-management functions and where readers 
 - **Database behavior:** The updated inventory record is committed immediately.
 - **Errors:** Raises `ValueError` for a missing product or negative quantity.
 
+## `adjust_quantity`
+
+- **Location:** `items.py` (`adjust_quantity`)
+- **Date added:** 2026-09-26
+- **Purpose:** Adds or removes a requested number of units from an item's current inventory quantity.
+- **Parameters:**
+  - `product_id`: ID of the product to adjust.
+  - `quantity_change`: Nonzero integer amount to add. Use a positive value to add stock and a negative value to remove stock.
+- **Returns:** Nothing after a successful update.
+- **Database behavior:** Updates the quantity atomically and commits the change immediately.
+- **Errors:** Raises `ValueError` for a missing product, a zero or non-integer change, or an adjustment that would make stock negative.
+
 ## How To Find The Functions
 
 1. Open `items.py` in the project root.

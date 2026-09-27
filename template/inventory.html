@@ -43,6 +43,20 @@
                     {{ item["quantity"] }} units available
                 </span>
                 {% endif %}
+
+                <div class="item-actions" aria-label="Adjust {{ item['name'] }} stock">
+                    <form method="post" action="{{ url_for('adjust_stock') }}" data-item-name="{{ item['name'] }}" data-action="add" onsubmit="return openQuantityDialog(this);">
+                        <input type="hidden" name="product_id" value="{{ item['product_id'] }}">
+                        <input type="hidden" name="quantity_change" value="1">
+                        <button class="button button-primary" type="submit" aria-label="Add units to {{ item['name'] }}" title="Add units">+</button>
+                    </form>
+                    <form method="post" action="{{ url_for('adjust_stock') }}" data-item-name="{{ item['name'] }}" data-action="remove" data-current-quantity="{{ item['quantity'] }}" onsubmit="return openQuantityDialog(this);">
+                        <input type="hidden" name="product_id" value="{{ item['product_id'] }}">
+                        <input type="hidden" name="quantity_change" value="-1">
+                        <!-- Prevent removal until this item has stock available. -->
+                        <button class="button button-danger" type="submit" aria-label="Remove units from {{ item['name'] }}" title="Remove units"{% if item["quantity"] == 0 %} disabled{% endif %}>-</button>
+                    </form>
+                </div>
             </article>
             {% else %}
             <p class="muted">No active inventory items found.</p>
@@ -50,4 +64,75 @@
         </div>
     </section>
 </main>
+
+<div class="quantity-dialog" id="quantity-dialog" hidden>
+    <div class="quantity-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="quantity-dialog-title">
+        <h2 id="quantity-dialog-title">Adjust stock</h2>
+        <p class="muted" id="quantity-dialog-message"></p>
+        <form id="quantity-dialog-form">
+            <label for="quantity-input">Units</label>
+            <input id="quantity-input" type="number" min="1" step="1" required>
+            <div class="item-actions">
+                <button class="button button-quiet" id="quantity-cancel" type="button">Cancel</button>
+                <button class="button button-primary" type="submit">Done</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Keep the clicked stock action pending while the user enters a quantity.
+    const quantityDialog = document.getElementById("quantity-dialog");
+    const quantityDialogForm = document.getElementById("quantity-dialog-form");
+    const quantityInput = document.getElementById("quantity-input");
+    const quantityDialogMessage = document.getElementById("quantity-dialog-message");
+    let pendingAdjustmentForm;
+
+    // Open the dialog instead of submitting the placeholder +/- quantity.
+    function openQuantityDialog(form) {
+        pendingAdjustmentForm = form;
+        const action = form.dataset.action === "add" ? "add to" : "remove from";
+        quantityDialogMessage.textContent = `How many units would you like to ${action} ${form.dataset.itemName}?`;
+        quantityInput.value = "1";
+        quantityDialog.hidden = false;
+        quantityInput.focus();
+        quantityInput.select();
+        return false;
+    }
+
+    // Close the dialog and clear the form reference before another adjustment begins.
+    function closeQuantityDialog() {
+        quantityDialog.hidden = true;
+        pendingAdjustmentForm = null;
+    }
+
+    document.getElementById("quantity-cancel").addEventListener("click", closeQuantityDialog);
+
+    // Validate the amount, apply the selected direction, and submit the original form.
+    quantityDialogForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const amount = Number(quantityInput.value);
+        if (!Number.isSafeInteger(amount) || amount < 1 || !pendingAdjustmentForm) {
+            quantityInput.setCustomValidity("Enter a whole number greater than zero.");
+            quantityInput.reportValidity();
+            return;
+        }
+
+        // Keep the same dialog open when a removal exceeds the available stock.
+        if (pendingAdjustmentForm.dataset.action === "remove" && amount > Number(pendingAdjustmentForm.dataset.currentQuantity)) {
+            quantityInput.setCustomValidity(`You can only remove up to ${pendingAdjustmentForm.dataset.currentQuantity} units from stock.`);
+            quantityInput.reportValidity();
+            return;
+        }
+
+        const direction = pendingAdjustmentForm.dataset.action === "add" ? 1 : -1;
+        pendingAdjustmentForm.elements.quantity_change.value = amount * direction;
+        const formToSubmit = pendingAdjustmentForm;
+        closeQuantityDialog();
+        formToSubmit.submit();
+    });
+
+    // Clear an earlier validation message as soon as the user edits the amount.
+    quantityInput.addEventListener("input", () => quantityInput.setCustomValidity(""));
+</script>
 {% endblock %}

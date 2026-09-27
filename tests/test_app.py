@@ -1,6 +1,6 @@
 from app import create_app
 from database import get_db, init_db, query_db
-from items import add_item, remove_item, update_quantity
+from items import add_item, adjust_quantity, remove_item, update_quantity
 
 
 # Verify that the app can build the SQLite schema into a temporary database file.
@@ -129,6 +129,42 @@ def test_update_quantity_rejects_negative_quantity(tmp_path):
             raise AssertionError("Expected negative quantity to be rejected")
 
 
+def test_adjust_quantity_adds_and_removes_one_unit(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=15)
+        adjust_quantity(product_id, 1)
+        adjust_quantity(product_id, -1)
+        quantity = (
+            get_db()
+            .execute(
+                "SELECT quantity FROM inventory WHERE product_id = ?", (product_id,)
+            )
+            .fetchone()[0]
+        )
+
+    assert quantity == 15
+
+
+def test_adjust_quantity_rejects_removing_below_zero(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=0)
+
+        try:
+            adjust_quantity(product_id, -1)
+        except ValueError as error:
+            assert str(error) == "Stock cannot be negative"
+        else:
+            raise AssertionError("Expected stock below zero to be rejected")
+
+
 # Auth tests confirm that protected pages redirect and the default admin account works.
 def test_login_requires_authentication(tmp_path):
     database_path = tmp_path / "inventory.db"
@@ -201,7 +237,94 @@ def test_homepage_displays_database_inventory(tmp_path):
     assert "Catan" in page
     assert "5 units available" in page
     assert "1 items tracked" in page
+    assert 'id="quantity-input"' in page
+    assert ">Done</button>" in page
+    assert 'data-current-quantity="5"' in page
     assert "Sample item" not in page
+
+
+def test_inventory_disables_removal_when_stock_is_zero(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        add_item("Catan", "board_game", quantity=0)
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    page = client.get("/").get_data(as_text=True)
+
+    assert 'aria-label="Remove units from Catan"' in page
+    assert 'aria-label="Remove units from Catan" title="Remove units" disabled' in page
+
+
+def test_inventory_page_adjusts_stock_by_one_unit(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=15)
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+
+    response = client.post(
+        "/adjust-stock",
+        data={"product_id": product_id, "quantity_change": 1},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/"
+    with app.app_context():
+        assert (
+            get_db()
+            .execute(
+                "SELECT quantity FROM inventory WHERE product_id = ?", (product_id,)
+            )
+            .fetchone()[0]
+            == 16
+        )
+
+
+def test_inventory_page_adjusts_stock_by_requested_amount(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game", quantity=15)
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin"})
+
+    add_response = client.post(
+        "/adjust-stock",
+        data={"product_id": product_id, "quantity_change": 15},
+    )
+    remove_response = client.post(
+        "/adjust-stock",
+        data={"product_id": product_id, "quantity_change": -5},
+    )
+
+    assert add_response.status_code == 302
+    assert remove_response.status_code == 302
+    with app.app_context():
+        assert (
+            get_db()
+            .execute(
+                "SELECT quantity FROM inventory WHERE product_id = ?", (product_id,)
+            )
+            .fetchone()[0]
+            == 25
+        )
 
 
 # Verify that the add-item page is protected but reachable after login.
