@@ -1,12 +1,33 @@
+import base64
+import io
 import os
+import secrets
 from datetime import timedelta
 from functools import wraps
 
+import pyotp
+import qrcode
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import close_db, get_db, init_db, query_db
-from items import adjust_quantity, remove_item, add_item
+from items import add_item, adjust_quantity, remove_item
+
+BACKUP_CODE_COUNT = 8  # Number of one-time backup codes issued per user - NL
+
+
+# Render a TOTP provisioning URI as a base64 PNG the browser can show inline. - NL
+def build_qr_code_data_uri(provisioning_uri):
+    image = qrcode.make(provisioning_uri)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+# Create fresh single-use backup codes and return the plaintext values to show once. - NL
+def generate_backup_codes():
+    return [secrets.token_hex(5) for _ in range(BACKUP_CODE_COUNT)]
 
 
 # Create the Flask app using a factory so tests can pass in custom config.
@@ -42,6 +63,37 @@ def create_app(test_config=None):
             return view(*args, **kwargs)
 
         return wrapped_view
+
+    # Complete a login by populating the permanent session. - NL
+    def finish_login(user_id, username, must_change_password):
+        session.clear()
+        session.permanent = True
+        session["user_id"] = user_id
+        session["username"] = username
+        session["must_change_password"] = bool(must_change_password)
+
+    # Consume a matching, unused backup code if the submitted value redeems one. - NL
+    def redeem_backup_code(user_id, code):
+        if not code:
+            return False
+
+        database = get_db()
+        candidates = database.execute(
+            """SELECT backup_code_id, code_hash FROM user_backup_codes
+            WHERE user_id = ? AND used_at IS NULL""",
+            (user_id,),
+        ).fetchall()
+
+        for candidate in candidates:
+            if check_password_hash(candidate["code_hash"], code):
+                database.execute(
+                    "UPDATE user_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE backup_code_id = ?",
+                    (candidate["backup_code_id"],),
+                )
+                database.commit()
+                return True
+
+        return False
 
     @app.get("/")
     @login_required
@@ -91,7 +143,8 @@ def create_app(test_config=None):
         user = (
             get_db()
             .execute(
-                "SELECT user_id, username, password_hash FROM users WHERE username = ?",
+                """SELECT user_id, username, password_hash, totp_enabled, must_change_password
+                FROM users WHERE username = ?""",
                 (username,),
             )
             .fetchone()
@@ -99,12 +152,58 @@ def create_app(test_config=None):
 
         if user and check_password_hash(user["password_hash"], password):
             session.clear()
-            session.permanent = True
-            session["user_id"] = user["user_id"]
-            session["username"] = user["username"]
+            if user["totp_enabled"]:
+                # Hold the login until a valid authenticator code is provided. - NL
+                session["pending_2fa_user_id"] = user["user_id"]
+                return redirect(url_for("verify_2fa_page"))
+
+            finish_login(
+                user["user_id"], user["username"], user["must_change_password"]
+            )
             return redirect(url_for("inventory_page"))
 
         return render_template("login.html", error="Invalid username or password"), 401
+
+    # Show the authenticator code prompt for a password-verified, pending login. - NL
+    @app.get("/login/2fa")
+    def verify_2fa_page():
+        if not session.get("pending_2fa_user_id"):
+            return redirect(url_for("login_page"))
+        return render_template("verify_2fa.html", error=None)
+
+    # Check the submitted authenticator or backup code and finish the login. - NL
+    @app.post("/login/2fa")
+    def verify_2fa():
+        pending_user_id = session.get("pending_2fa_user_id")
+        if not pending_user_id:
+            return redirect(url_for("login_page"))
+
+        code = request.form.get("code", "").strip()
+        user = (
+            get_db()
+            .execute(
+                """SELECT user_id, username, totp_secret, must_change_password
+                FROM users WHERE user_id = ?""",
+                (pending_user_id,),
+            )
+            .fetchone()
+        )
+
+        if user and pyotp.TOTP(user["totp_secret"]).verify(code, valid_window=1):
+            finish_login(
+                user["user_id"], user["username"], user["must_change_password"]
+            )
+            return redirect(url_for("inventory_page"))
+
+        if user and redeem_backup_code(user["user_id"], code):
+            finish_login(
+                user["user_id"], user["username"], user["must_change_password"]
+            )
+            return redirect(url_for("inventory_page"))
+
+        return render_template(
+            "verify_2fa.html", error="Invalid authentication code"
+        ), 401
 
     # Ensure the session is cleared when the user logs out.
     @app.get("/logout")
@@ -115,13 +214,29 @@ def create_app(test_config=None):
     # Mark the session as expired before sending the user back to login.
     @app.before_request
     def handle_expired_session():
-        if request.endpoint in {"login", "login_page", "logout"}:
+        # Pending-2FA endpoints are exempt since the user isn't fully logged in yet. - NL
+        if request.endpoint in {
+            "login",
+            "login_page",
+            "logout",
+            "verify_2fa_page",
+            "verify_2fa",
+        }:
             return None
         if request.path.startswith("/static"):
             return None
         if not session.get("user_id") and request.endpoint is not None:
             session["expired"] = True
             return redirect(url_for("login_page"))
+
+    # Block every other page until a required password change is completed. - NL
+    @app.before_request
+    def require_password_change():
+        allowed_endpoints = {"change_password_page", "change_password", "logout"}
+        if request.path.startswith("/static") or request.endpoint in allowed_endpoints:
+            return None
+        if session.get("user_id") and session.get("must_change_password"):
+            return redirect(url_for("change_password_page"))
 
     # Protect the add-item page and accept new inventory submissions.
     @app.route("/add-item", methods=["GET", "POST"])
@@ -161,6 +276,145 @@ def create_app(test_config=None):
             return "Invalid inventory item", 400
 
         return redirect(url_for("inventory_page"))
+
+    # Prompt for a new password when the account is flagged for a forced change. - NL
+    @app.get("/account/change-password")
+    @login_required
+    def change_password_page():
+        return render_template("change_password.html", error=None)
+
+    # Apply the new password and clear the forced-change flag. - NL
+    @app.post("/account/change-password")
+    @login_required
+    def change_password():
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if len(new_password) < 8 or new_password != confirm_password:
+            return render_template(
+                "change_password.html",
+                error="Passwords must match and be at least 8 characters",
+            ), 400
+
+        database = get_db()
+        database.execute(
+            "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE user_id = ?",
+            (generate_password_hash(new_password), session["user_id"]),
+        )
+        database.commit()
+        session["must_change_password"] = False
+        return redirect(url_for("inventory_page"))
+
+    # Show current 2FA status and, when not yet enabled, a QR code to scan. - NL
+    @app.get("/account/2fa")
+    @login_required
+    def account_2fa_page():
+        database = get_db()
+        user = database.execute(
+            "SELECT username, totp_secret, totp_enabled FROM users WHERE user_id = ?",
+            (session["user_id"],),
+        ).fetchone()
+
+        if user["totp_enabled"]:
+            return render_template(
+                "account_2fa.html", enabled=True, qr_code=None, secret=None, error=None
+            )
+
+        # Reuse a secret already generated for an in-progress enrollment. - NL
+        secret = user["totp_secret"] or pyotp.random_base32()
+        if not user["totp_secret"]:
+            database.execute(
+                "UPDATE users SET totp_secret = ? WHERE user_id = ?",
+                (secret, session["user_id"]),
+            )
+            database.commit()
+
+        provisioning_uri = pyotp.TOTP(secret).provisioning_uri(
+            name=user["username"], issuer_name="Inventory Management System"
+        )
+        return render_template(
+            "account_2fa.html",
+            enabled=False,
+            qr_code=build_qr_code_data_uri(provisioning_uri),
+            secret=secret,
+            error=None,
+        )
+
+    # Confirm enrollment by checking a live code, then issue one-time backup codes. - NL
+    @app.post("/account/2fa/enable")
+    @login_required
+    def account_2fa_enable():
+        database = get_db()
+        user = database.execute(
+            "SELECT username, totp_secret FROM users WHERE user_id = ?",
+            (session["user_id"],),
+        ).fetchone()
+
+        code = request.form.get("code", "").strip()
+        if not user["totp_secret"] or not pyotp.TOTP(user["totp_secret"]).verify(
+            code, valid_window=1
+        ):
+            provisioning_uri = pyotp.TOTP(user["totp_secret"]).provisioning_uri(
+                name=user["username"], issuer_name="Inventory Management System"
+            )
+            return render_template(
+                "account_2fa.html",
+                enabled=False,
+                qr_code=build_qr_code_data_uri(provisioning_uri),
+                secret=user["totp_secret"],
+                error="Invalid authentication code",
+            ), 400
+
+        backup_codes = generate_backup_codes()
+        database.execute(
+            "UPDATE users SET totp_enabled = 1, totp_confirmed_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+            (session["user_id"],),
+        )
+        database.execute(
+            "DELETE FROM user_backup_codes WHERE user_id = ?", (session["user_id"],)
+        )
+        database.executemany(
+            "INSERT INTO user_backup_codes (user_id, code_hash) VALUES (?, ?)",
+            [
+                (session["user_id"], generate_password_hash(backup_code))
+                for backup_code in backup_codes
+            ],
+        )
+        database.commit()
+
+        return render_template(
+            "account_2fa_backup_codes.html", backup_codes=backup_codes
+        )
+
+    # Turn 2FA off after re-checking the account password and wipe stored secrets. - NL
+    @app.post("/account/2fa/disable")
+    @login_required
+    def account_2fa_disable():
+        database = get_db()
+        user = database.execute(
+            "SELECT password_hash FROM users WHERE user_id = ?", (session["user_id"],)
+        ).fetchone()
+
+        password = request.form.get("password", "")
+        if not check_password_hash(user["password_hash"], password):
+            return render_template(
+                "account_2fa.html",
+                enabled=True,
+                qr_code=None,
+                secret=None,
+                error="Incorrect password",
+            ), 401
+
+        database.execute(
+            """UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_confirmed_at = NULL
+            WHERE user_id = ?""",
+            (session["user_id"],),
+        )
+        database.execute(
+            "DELETE FROM user_backup_codes WHERE user_id = ?", (session["user_id"],)
+        )
+        database.commit()
+        return redirect(url_for("account_2fa_page"))
 
     # CLI helper to initialize the SQLite schema.
     @app.cli.command("init-db")

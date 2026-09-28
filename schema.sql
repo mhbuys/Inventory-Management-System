@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS reorders;
 DROP TABLE IF EXISTS inventory_transactions;
 DROP TABLE IF EXISTS user_roles;
 DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS user_backup_codes;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS inventory;
 DROP TABLE IF EXISTS products;
@@ -36,7 +37,21 @@ CREATE TABLE inventory (
 CREATE TABLE users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL
+    password_hash TEXT NOT NULL,
+    must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1)), -- Forces a password reset before the account can be used - NL
+    totp_secret TEXT, -- Base32 secret used to generate/verify Google Authenticator codes - NL
+    totp_enabled INTEGER NOT NULL DEFAULT 0 CHECK (totp_enabled IN (0, 1)), -- Whether login requires a 2FA code - NL
+    totp_confirmed_at TEXT -- Timestamp when the user finished 2FA enrollment - NL
+);
+
+-- One-time backup codes users can redeem if they lose access to their authenticator app. - NL
+CREATE TABLE user_backup_codes (
+    backup_code_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    code_hash TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
 );
 
 -- Role definitions used to group permissions for users.
@@ -93,3 +108,4 @@ CREATE INDEX idx_inventory_transactions_product_id ON inventory_transactions (pr
 CREATE INDEX idx_inventory_transactions_user_id ON inventory_transactions (user_id);
 CREATE INDEX idx_reorders_product_id ON reorders (product_id);
 CREATE INDEX idx_event_logs_user_id ON event_logs (user_id);
+CREATE INDEX idx_user_backup_codes_user_id ON user_backup_codes (user_id); -- Speeds up backup code lookups during 2FA login - NL

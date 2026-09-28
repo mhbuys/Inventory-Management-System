@@ -2,3 +2,5 @@
 Flask>=3.1,<4
 python-dotenv>=1.0,<2
 pytest>=8.0,<9
+pyotp>=2.9,<3      # Generates and verifies Google Authenticator TOTP codes - NL
+qrcode[pil]>=7.4,<8  # Renders the QR code shown during 2FA enrollment - NL
