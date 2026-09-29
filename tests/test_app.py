@@ -496,9 +496,18 @@ def test_two_factor_enrollment_and_totp_login(tmp_path):
         "/login", data={"username": "admin", "password": "new-password123"}
     )
     assert login_response.headers["Location"] == "/login/2fa"
-    protected_response = client.get("/", follow_redirects=False)
-    assert protected_response.status_code == 302
-    assert protected_response.headers["Location"] == "/login"
+    for protected_path in ("/", "/add-item", "/remove-item", "/account/2fa"):
+        protected_response = client.get(protected_path, follow_redirects=False)
+        assert protected_response.status_code == 302
+        assert protected_response.headers["Location"] == "/login/2fa"
+
+    mutation_response = client.post(
+        "/adjust-stock",
+        data={"product_id": 1, "quantity_change": 1},
+        follow_redirects=False,
+    )
+    assert mutation_response.status_code == 302
+    assert mutation_response.headers["Location"] == "/login/2fa"
 
     verify_response = client.post(
         "/login/2fa", data={"code": pyotp.TOTP(settings["secret_key"]).now()}

@@ -223,6 +223,18 @@ def create_app(test_config=None):
         session.clear()
         return redirect(url_for("login_page"))
 
+    # Keep partially authenticated sessions on the 2FA challenge until verified. - NL
+    @app.before_request
+    def require_two_factor_verification():
+        if not session.get("pending_2fa_user_id"):
+            return None
+
+        allowed_endpoints = {"verify_2fa_page", "verify_2fa", "logout"}
+        if request.path.startswith("/static") or request.endpoint in allowed_endpoints:
+            return None
+
+        return redirect(url_for("verify_2fa_page"))
+
     # Mark the session as expired before sending the user back to login.
     @app.before_request
     def handle_expired_session():
