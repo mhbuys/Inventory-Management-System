@@ -1,6 +1,17 @@
+import pyotp
+
 from app import create_app
 from database import get_db, init_db, query_db
 from items import add_item, adjust_quantity, remove_item, update_quantity
+
+
+# Log in as the seeded admin and clear the forced password-change flag it starts with.
+def login_as_admin(client):
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    client.post(
+        "/account/change-password",
+        data={"new_password": "new-password123", "confirm_password": "new-password123"},
+    )
 
 
 # Verify that the app can build the SQLite schema into a temporary database file.
@@ -18,6 +29,7 @@ def test_app_initializes_database(tmp_path):
     # These are the core tables required for the inventory system.
     assert "products" in {row[0] for row in tables}
     assert "inventory" in {row[0] for row in tables}
+    assert "user_2fa" in {row[0] for row in tables}
 
 
 def test_query_db_returns_matching_rows(tmp_path):
@@ -215,7 +227,7 @@ def test_default_admin_user_can_login(tmp_path):
     )
 
     assert response.status_code == 302
-    assert response.headers["Location"] == "/"
+    assert response.headers["Location"] == "/account/2fa"
 
 
 def test_homepage_displays_database_inventory(tmp_path):
@@ -229,7 +241,7 @@ def test_homepage_displays_database_inventory(tmp_path):
         add_item("Catan", "board_game", price=34.99, quantity=5)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     response = client.get("/")
     page = response.get_data(as_text=True)
 
@@ -254,7 +266,7 @@ def test_inventory_disables_removal_when_stock_is_zero(tmp_path):
         add_item("Catan", "board_game", quantity=0)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     page = client.get("/").get_data(as_text=True)
 
     assert 'aria-label="Remove units from Catan"' in page
@@ -272,7 +284,7 @@ def test_inventory_page_adjusts_stock_by_one_unit(tmp_path):
         product_id = add_item("Catan", "board_game", quantity=15)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     response = client.post(
         "/adjust-stock",
@@ -303,7 +315,7 @@ def test_inventory_page_adjusts_stock_by_requested_amount(tmp_path):
         product_id = add_item("Catan", "board_game", quantity=15)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     add_response = client.post(
         "/adjust-stock",
@@ -343,7 +355,7 @@ def test_add_item_page_requires_authentication(tmp_path):
     assert response.status_code == 302
     assert response.headers["Location"] == "/login"
 
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     response = client.get("/add-item")
 
     assert response.status_code == 200
@@ -362,7 +374,7 @@ def test_remove_item_page_deletes_selected_inventory_item(tmp_path):
         product_id = add_item("Catan", "board_game", quantity=5)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     page = client.get("/remove-item")
     assert page.status_code == 200
@@ -392,7 +404,7 @@ def test_remove_item_rejects_invalid_product_id(tmp_path):
         init_db()
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     response = client.post("/remove-item", data={"product_id": "not-a-number"})
 
@@ -411,9 +423,128 @@ def test_logout_clears_authentication_session(tmp_path):
         init_db()
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     response = client.get("/logout", follow_redirects=False)
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/login"
     assert client.get("/", follow_redirects=False).headers["Location"] == "/login"
+
+
+# Verify 2FA enrollment, require a TOTP at login, and block pending sessions. - NL
+def test_two_factor_enrollment_and_totp_login(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    login_as_admin(client)
+
+    setup_response = client.get("/account/2fa")
+    assert setup_response.status_code == 200
+    with app.app_context():
+        settings = (
+            get_db()
+            .execute(
+                """SELECT user_2fa.secret_key, user_2fa.is_enabled
+            FROM user_2fa JOIN users ON users.user_id = user_2fa.user_id
+            WHERE users.username = ?""",
+                ("admin",),
+            )
+            .fetchone()
+        )
+    secret_key = settings["secret_key"]
+    assert settings["secret_key"]
+    assert settings["is_enabled"] == 0
+
+    enable_response = client.post(
+        "/account/2fa/enable",
+        data={"code": pyotp.TOTP(settings["secret_key"]).now()},
+    )
+    assert enable_response.status_code == 200
+    with app.app_context():
+        settings = (
+            get_db()
+            .execute(
+                """SELECT is_enabled, confirmed_at, updated_at
+            FROM user_2fa JOIN users ON users.user_id = user_2fa.user_id
+            WHERE users.username = ?""",
+                ("admin",),
+            )
+            .fetchone()
+        )
+        backup_code_count = (
+            get_db()
+            .execute(
+                """SELECT COUNT(*) FROM user_backup_codes
+            JOIN users ON users.user_id = user_backup_codes.user_id
+            WHERE users.username = ?""",
+                ("admin",),
+            )
+            .fetchone()[0]
+        )
+    assert settings["is_enabled"] == 1
+    assert settings["confirmed_at"]
+    assert settings["updated_at"]
+    assert backup_code_count > 0
+
+    client.get("/logout")
+    login_response = client.post(
+        "/login", data={"username": "admin", "password": "new-password123"}
+    )
+    assert login_response.headers["Location"] == "/login/2fa"
+    for protected_path in ("/", "/add-item", "/remove-item", "/account/2fa"):
+        protected_response = client.get(protected_path, follow_redirects=False)
+        assert protected_response.status_code == 302
+        assert protected_response.headers["Location"] == "/login/2fa"
+
+    mutation_response = client.post(
+        "/adjust-stock",
+        data={"product_id": 1, "quantity_change": 1},
+        follow_redirects=False,
+    )
+    assert mutation_response.status_code == 302
+    assert mutation_response.headers["Location"] == "/login/2fa"
+
+    verify_response = client.post(
+        "/login/2fa", data={"code": pyotp.TOTP(secret_key).now()}
+    )
+    assert verify_response.headers["Location"] == "/"
+    assert client.get("/").status_code == 200
+
+
+# Verify users without enabled 2FA are sent to setup after password login. - NL
+def test_login_redirects_to_two_factor_setup_when_not_enabled(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    first_login = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert first_login.headers["Location"] == "/account/2fa"
+
+    password_page = client.get("/account/2fa", follow_redirects=False)
+    assert password_page.status_code == 302
+    assert password_page.headers["Location"] == "/account/change-password"
+
+    password_response = client.post(
+        "/account/change-password",
+        data={"new_password": "new-password123", "confirm_password": "new-password123"},
+    )
+    assert password_response.headers["Location"] == "/account/2fa"
+    assert client.get("/account/2fa").status_code == 200
+
+    client.get("/logout")
+    subsequent_login = client.post(
+        "/login", data={"username": "admin", "password": "new-password123"}
+    )
+    assert subsequent_login.headers["Location"] == "/account/2fa"
+    assert client.get("/account/2fa").status_code == 200

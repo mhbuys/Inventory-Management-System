@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Two-factor authentication | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Account actions">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Back to inventory</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page-shell">
+    <section class="inventory-panel" aria-labelledby="two-fa-title">
+        <p class="eyebrow">Security</p>
+        <h1 id="two-fa-title">Two-factor authentication</h1>
+
+        {% if error %}
+        <p class="muted" style="color: var(--danger);">{{ error }}</p>
+        {% endif %}
+
+        {% if enabled %}
+        <!-- Disabling 2FA re-checks the password before wiping the stored secret - NL -->
+        <p class="muted">Two-factor authentication is currently enabled on your account.</p>
+        <form method="post" action="{{ url_for('account_2fa_disable') }}">
+            <label for="password">Confirm your password to disable it</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required
+                style="width: min(320px, 100%); border: 1px solid var(--line); padding: .65rem; margin: .5rem 0 1rem;">
+            <div>
+                <button class="button button-danger" type="submit">Disable two-factor authentication</button>
+            </div>
+        </form>
+        {% else %}
+        <!-- QR code and manual key let the user enroll with Google Authenticator - NL -->
+        <p class="muted">Scan this QR code with Google Authenticator (or any TOTP app), then enter the
+            6-digit code it generates to finish enabling two-factor authentication.</p>
+        <img src="{{ qr_code }}" alt="Scannable authenticator QR code" width="220" height="220">
+        <p class="muted">Can't scan it? Enter this key manually: <strong>{{ secret }}</strong></p>
+        <form method="post" action="{{ url_for('account_2fa_enable') }}">
+            <label for="code">Authentication code</label>
+            <input id="code" name="code" type="text" inputmode="numeric" maxlength="6" required
+                style="width: min(220px, 100%); border: 1px solid var(--line); padding: .65rem; margin: .5rem 0 1rem;">
+            <div>
+                <button class="button button-primary" type="submit">Enable two-factor authentication</button>
+            </div>
+        </form>
+        {% endif %}
+    </section>
+</main>
+{% endblock %}

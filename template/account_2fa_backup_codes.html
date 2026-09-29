@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Backup codes | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Account actions">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Back to inventory</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page-shell">
+    <section class="inventory-panel" aria-labelledby="backup-codes-title">
+        <p class="eyebrow">Security</p>
+        <h1 id="backup-codes-title">Two-factor authentication enabled</h1>
+        <!-- Codes are only ever shown once, right after enrollment - NL -->
+        <p class="muted">Save these one-time backup codes somewhere safe. Each one can be used
+            once to sign in if you lose access to your authenticator app. They will not be shown again.</p>
+        <ul style="font: 1.1rem/1.9 monospace; list-style: none; padding: 0;">
+            {% for backup_code in backup_codes %}
+            <li>{{ backup_code }}</li>
+            {% endfor %}
+        </ul>
+        <a class="button button-primary" href="{{ url_for('inventory_page') }}">Done</a>
+    </section>
+</main>
+{% endblock %}
