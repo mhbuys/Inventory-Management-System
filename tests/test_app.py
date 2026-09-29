@@ -227,7 +227,7 @@ def test_default_admin_user_can_login(tmp_path):
     )
 
     assert response.status_code == 302
-    assert response.headers["Location"] == "/"
+    assert response.headers["Location"] == "/account/2fa"
 
 
 def test_homepage_displays_database_inventory(tmp_path):
@@ -457,6 +457,7 @@ def test_two_factor_enrollment_and_totp_login(tmp_path):
             )
             .fetchone()
         )
+    secret_key = settings["secret_key"]
     assert settings["secret_key"]
     assert settings["is_enabled"] == 0
 
@@ -510,7 +511,7 @@ def test_two_factor_enrollment_and_totp_login(tmp_path):
     assert mutation_response.headers["Location"] == "/login/2fa"
 
     verify_response = client.post(
-        "/login/2fa", data={"code": pyotp.TOTP(settings["secret_key"]).now()}
+        "/login/2fa", data={"code": pyotp.TOTP(secret_key).now()}
     )
     assert verify_response.headers["Location"] == "/"
     assert client.get("/").status_code == 200
