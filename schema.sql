@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS inventory_transactions;
 DROP TABLE IF EXISTS user_roles;
 DROP TABLE IF EXISTS roles;
 DROP TABLE IF EXISTS user_backup_codes;
+DROP TABLE IF EXISTS user_2fa;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS inventory;
 DROP TABLE IF EXISTS products;
@@ -38,10 +39,17 @@ CREATE TABLE users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1)), -- Forces a password reset before the account can be used - NL
-    totp_secret TEXT, -- Base32 secret used to generate/verify Google Authenticator codes - NL
-    totp_enabled INTEGER NOT NULL DEFAULT 0 CHECK (totp_enabled IN (0, 1)), -- Whether login requires a 2FA code - NL
-    totp_confirmed_at TEXT -- Timestamp when the user finished 2FA enrollment - NL
+    must_change_password INTEGER NOT NULL DEFAULT 0 CHECK (must_change_password IN (0, 1)) -- Forces a password reset before the account can be used - NL
+);
+
+-- One-to-one two-factor authentication settings for each user. - NL
+CREATE TABLE user_2fa (
+    user_id INTEGER PRIMARY KEY,
+    secret_key TEXT,
+    is_enabled INTEGER NOT NULL DEFAULT 0 CHECK (is_enabled IN (0, 1)),
+    confirmed_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
 );
 
 -- One-time backup codes users can redeem if they lose access to their authenticator app. - NL

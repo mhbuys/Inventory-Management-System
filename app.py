@@ -143,8 +143,12 @@ def create_app(test_config=None):
         user = (
             get_db()
             .execute(
-                """SELECT user_id, username, password_hash, totp_enabled, must_change_password
-                FROM users WHERE username = ?""",
+                """SELECT users.user_id, users.username, users.password_hash,
+                          COALESCE(user_2fa.is_enabled, 0) AS is_enabled,
+                          users.must_change_password
+                FROM users
+                LEFT JOIN user_2fa ON user_2fa.user_id = users.user_id
+                WHERE users.username = ?""",
                 (username,),
             )
             .fetchone()
@@ -152,7 +156,7 @@ def create_app(test_config=None):
 
         if user and check_password_hash(user["password_hash"], password):
             session.clear()
-            if user["totp_enabled"]:
+            if user["is_enabled"]:
                 # Hold the login until a valid authenticator code is provided. - NL
                 session["pending_2fa_user_id"] = user["user_id"]
                 return redirect(url_for("verify_2fa_page"))
@@ -182,14 +186,21 @@ def create_app(test_config=None):
         user = (
             get_db()
             .execute(
-                """SELECT user_id, username, totp_secret, must_change_password
-                FROM users WHERE user_id = ?""",
+                """SELECT users.user_id, users.username, user_2fa.secret_key,
+                          users.must_change_password
+                FROM users
+                LEFT JOIN user_2fa ON user_2fa.user_id = users.user_id
+                WHERE users.user_id = ?""",
                 (pending_user_id,),
             )
             .fetchone()
         )
 
-        if user and pyotp.TOTP(user["totp_secret"]).verify(code, valid_window=1):
+        if (
+            user
+            and user["secret_key"]
+            and pyotp.TOTP(user["secret_key"]).verify(code, valid_window=1)
+        ):
             finish_login(
                 user["user_id"], user["username"], user["must_change_password"]
             )
@@ -311,21 +322,28 @@ def create_app(test_config=None):
     def account_2fa_page():
         database = get_db()
         user = database.execute(
-            "SELECT username, totp_secret, totp_enabled FROM users WHERE user_id = ?",
+            """SELECT users.username, user_2fa.secret_key,
+                      COALESCE(user_2fa.is_enabled, 0) AS is_enabled
+            FROM users
+            LEFT JOIN user_2fa ON user_2fa.user_id = users.user_id
+            WHERE users.user_id = ?""",
             (session["user_id"],),
         ).fetchone()
 
-        if user["totp_enabled"]:
+        if user["is_enabled"]:
             return render_template(
                 "account_2fa.html", enabled=True, qr_code=None, secret=None, error=None
             )
 
         # Reuse a secret already generated for an in-progress enrollment. - NL
-        secret = user["totp_secret"] or pyotp.random_base32()
-        if not user["totp_secret"]:
+        secret = user["secret_key"] or pyotp.random_base32()
+        if not user["secret_key"]:
             database.execute(
-                "UPDATE users SET totp_secret = ? WHERE user_id = ?",
-                (secret, session["user_id"]),
+                """INSERT INTO user_2fa (user_id, secret_key) VALUES (?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    secret_key = excluded.secret_key,
+                    updated_at = CURRENT_TIMESTAMP""",
+                (session["user_id"], secret),
             )
             database.commit()
 
@@ -346,28 +364,35 @@ def create_app(test_config=None):
     def account_2fa_enable():
         database = get_db()
         user = database.execute(
-            "SELECT username, totp_secret FROM users WHERE user_id = ?",
+            """SELECT users.username, user_2fa.secret_key
+            FROM users
+            LEFT JOIN user_2fa ON user_2fa.user_id = users.user_id
+            WHERE users.user_id = ?""",
             (session["user_id"],),
         ).fetchone()
 
         code = request.form.get("code", "").strip()
-        if not user["totp_secret"] or not pyotp.TOTP(user["totp_secret"]).verify(
-            code, valid_window=1
-        ):
-            provisioning_uri = pyotp.TOTP(user["totp_secret"]).provisioning_uri(
+        if not user or not user["secret_key"]:
+            return redirect(url_for("account_2fa_page"))
+
+        if not pyotp.TOTP(user["secret_key"]).verify(code, valid_window=1):
+            provisioning_uri = pyotp.TOTP(user["secret_key"]).provisioning_uri(
                 name=user["username"], issuer_name="Inventory Management System"
             )
             return render_template(
                 "account_2fa.html",
                 enabled=False,
                 qr_code=build_qr_code_data_uri(provisioning_uri),
-                secret=user["totp_secret"],
+                secret=user["secret_key"],
                 error="Invalid authentication code",
             ), 400
 
         backup_codes = generate_backup_codes()
         database.execute(
-            "UPDATE users SET totp_enabled = 1, totp_confirmed_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+            """UPDATE user_2fa
+            SET is_enabled = 1, confirmed_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?""",
             (session["user_id"],),
         )
         database.execute(
@@ -406,7 +431,9 @@ def create_app(test_config=None):
             ), 401
 
         database.execute(
-            """UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_confirmed_at = NULL
+            """UPDATE user_2fa
+            SET secret_key = NULL, is_enabled = 0, confirmed_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
             WHERE user_id = ?""",
             (session["user_id"],),
         )

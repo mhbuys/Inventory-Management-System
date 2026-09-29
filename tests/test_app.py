@@ -1,3 +1,5 @@
+import pyotp
+
 from app import create_app
 from database import get_db, init_db, query_db
 from items import add_item, adjust_quantity, remove_item, update_quantity
@@ -27,6 +29,7 @@ def test_app_initializes_database(tmp_path):
     # These are the core tables required for the inventory system.
     assert "products" in {row[0] for row in tables}
     assert "inventory" in {row[0] for row in tables}
+    assert "user_2fa" in {row[0] for row in tables}
 
 
 def test_query_db_returns_matching_rows(tmp_path):
@@ -426,3 +429,75 @@ def test_logout_clears_authentication_session(tmp_path):
     assert response.status_code == 302
     assert response.headers["Location"] == "/login"
     assert client.get("/", follow_redirects=False).headers["Location"] == "/login"
+
+
+def test_two_factor_enrollment_and_totp_login(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    login_as_admin(client)
+
+    setup_response = client.get("/account/2fa")
+    assert setup_response.status_code == 200
+    with app.app_context():
+        settings = (
+            get_db()
+            .execute(
+                """SELECT user_2fa.secret_key, user_2fa.is_enabled
+            FROM user_2fa JOIN users ON users.user_id = user_2fa.user_id
+            WHERE users.username = ?""",
+                ("admin",),
+            )
+            .fetchone()
+        )
+    assert settings["secret_key"]
+    assert settings["is_enabled"] == 0
+
+    enable_response = client.post(
+        "/account/2fa/enable",
+        data={"code": pyotp.TOTP(settings["secret_key"]).now()},
+    )
+    assert enable_response.status_code == 200
+    with app.app_context():
+        settings = (
+            get_db()
+            .execute(
+                """SELECT is_enabled, confirmed_at, updated_at
+            FROM user_2fa JOIN users ON users.user_id = user_2fa.user_id
+            WHERE users.username = ?""",
+                ("admin",),
+            )
+            .fetchone()
+        )
+        backup_code_count = (
+            get_db()
+            .execute(
+                """SELECT COUNT(*) FROM user_backup_codes
+            JOIN users ON users.user_id = user_backup_codes.user_id
+            WHERE users.username = ?""",
+                ("admin",),
+            )
+            .fetchone()[0]
+        )
+    assert settings["is_enabled"] == 1
+    assert settings["confirmed_at"]
+    assert settings["updated_at"]
+    assert backup_code_count > 0
+
+    client.get("/logout")
+    login_response = client.post(
+        "/login", data={"username": "admin", "password": "new-password123"}
+    )
+    assert login_response.headers["Location"] == "/login/2fa"
+
+    verify_response = client.post(
+        "/login/2fa", data={"code": pyotp.TOTP(settings["secret_key"]).now()}
+    )
+    assert verify_response.headers["Location"] == "/"
+    assert client.get("/").status_code == 200

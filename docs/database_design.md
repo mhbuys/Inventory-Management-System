@@ -1,6 +1,6 @@
 # Inventory Management System - Database Design
 
-The Inventory Management System will use a MySQL database to store and manage information for a hypothetical game store
+The Inventory Management System will use a SQLite3 database to store and manage information for a hypothetical game store
 
 The database will support:
 
@@ -114,10 +114,22 @@ Stores two-factor authentication information for user accounts.
 | Column | Description |
 |---|---|
 | user_id | Primary Key and Foreign Key referencing users |
-| secret_key | Secret key used to generate authentication codes |
+| secret_key | Base32 secret used to generate authentication codes |
 | is_enabled | Indicates whether 2FA is enabled for the user |
-| backup_codes | Backup recovery codes for account access |
+| confirmed_at | Date and time the user confirmed 2FA enrollment |
 | updated_at | Date and time the 2FA information was last updated |
+
+### 10. user_backup_codes
+
+Stores one-time backup codes separately from the 2FA settings. Codes are stored as hashes and marked as used when redeemed.
+
+| Column | Description |
+|---|---|
+| backup_code_id | Primary Key |
+| user_id | Foreign Key referencing users |
+| code_hash | Hash of a one-time backup code |
+| used_at | Date and time the code was redeemed; null while unused |
+| created_at | Date and time the code was created |
 
 ## Table Relationships
 
@@ -128,6 +140,7 @@ Stores two-factor authentication information for user accounts.
 - `users` links to `event_logs` using `user_id`.
 - `users` and `roles` are connected through the `user_roles` link table.
 - `users` links to `user_2fa` using `user_id`.
+- `users` links to `user_backup_codes` using `user_id`.
   
 ## Link Table
 
