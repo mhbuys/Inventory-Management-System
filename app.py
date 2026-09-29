@@ -164,7 +164,8 @@ def create_app(test_config=None):
             finish_login(
                 user["user_id"], user["username"], user["must_change_password"]
             )
-            return redirect(url_for("inventory_page"))
+
+            return redirect(url_for("account_2fa_page"))
 
         return render_template("login.html", error="Invalid username or password"), 401
 
@@ -314,6 +315,13 @@ def create_app(test_config=None):
         )
         database.commit()
         session["must_change_password"] = False
+        two_factor = database.execute(
+            "SELECT is_enabled FROM user_2fa WHERE user_id = ?",
+            (session["user_id"],),
+        ).fetchone()
+        if not two_factor or not two_factor["is_enabled"]:
+            # Send users without enabled 2FA to enrollment after a password change. - NL
+            return redirect(url_for("account_2fa_page"))
         return redirect(url_for("inventory_page"))
 
     # Show current 2FA status and, when not yet enabled, a QR code to scan. - NL

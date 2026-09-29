@@ -431,6 +431,7 @@ def test_logout_clears_authentication_session(tmp_path):
     assert client.get("/", follow_redirects=False).headers["Location"] == "/login"
 
 
+# Verify 2FA enrollment, require a TOTP at login, and block pending sessions. - NL
 def test_two_factor_enrollment_and_totp_login(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
@@ -495,9 +496,45 @@ def test_two_factor_enrollment_and_totp_login(tmp_path):
         "/login", data={"username": "admin", "password": "new-password123"}
     )
     assert login_response.headers["Location"] == "/login/2fa"
+    protected_response = client.get("/", follow_redirects=False)
+    assert protected_response.status_code == 302
+    assert protected_response.headers["Location"] == "/login"
 
     verify_response = client.post(
         "/login/2fa", data={"code": pyotp.TOTP(settings["secret_key"]).now()}
     )
     assert verify_response.headers["Location"] == "/"
     assert client.get("/").status_code == 200
+
+
+# Verify users without enabled 2FA are sent to setup after password login. - NL
+def test_login_redirects_to_two_factor_setup_when_not_enabled(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    first_login = client.post("/login", data={"username": "admin", "password": "admin"})
+    assert first_login.headers["Location"] == "/account/2fa"
+
+    password_page = client.get("/account/2fa", follow_redirects=False)
+    assert password_page.status_code == 302
+    assert password_page.headers["Location"] == "/account/change-password"
+
+    password_response = client.post(
+        "/account/change-password",
+        data={"new_password": "new-password123", "confirm_password": "new-password123"},
+    )
+    assert password_response.headers["Location"] == "/account/2fa"
+    assert client.get("/account/2fa").status_code == 200
+
+    client.get("/logout")
+    subsequent_login = client.post(
+        "/login", data={"username": "admin", "password": "new-password123"}
+    )
+    assert subsequent_login.headers["Location"] == "/account/2fa"
+    assert client.get("/account/2fa").status_code == 200
