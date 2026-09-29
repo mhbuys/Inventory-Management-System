@@ -3,6 +3,15 @@ from database import get_db, init_db, query_db
 from items import add_item, adjust_quantity, remove_item, update_quantity
 
 
+# Log in as the seeded admin and clear the forced password-change flag it starts with.
+def login_as_admin(client):
+    client.post("/login", data={"username": "admin", "password": "admin"})
+    client.post(
+        "/account/change-password",
+        data={"new_password": "new-password123", "confirm_password": "new-password123"},
+    )
+
+
 # Verify that the app can build the SQLite schema into a temporary database file.
 def test_app_initializes_database(tmp_path):
     database_path = tmp_path / "inventory.db"
@@ -229,7 +238,7 @@ def test_homepage_displays_database_inventory(tmp_path):
         add_item("Catan", "board_game", price=34.99, quantity=5)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     response = client.get("/")
     page = response.get_data(as_text=True)
 
@@ -254,7 +263,7 @@ def test_inventory_disables_removal_when_stock_is_zero(tmp_path):
         add_item("Catan", "board_game", quantity=0)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     page = client.get("/").get_data(as_text=True)
 
     assert 'aria-label="Remove units from Catan"' in page
@@ -272,7 +281,7 @@ def test_inventory_page_adjusts_stock_by_one_unit(tmp_path):
         product_id = add_item("Catan", "board_game", quantity=15)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     response = client.post(
         "/adjust-stock",
@@ -303,7 +312,7 @@ def test_inventory_page_adjusts_stock_by_requested_amount(tmp_path):
         product_id = add_item("Catan", "board_game", quantity=15)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     add_response = client.post(
         "/adjust-stock",
@@ -343,7 +352,7 @@ def test_add_item_page_requires_authentication(tmp_path):
     assert response.status_code == 302
     assert response.headers["Location"] == "/login"
 
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     response = client.get("/add-item")
 
     assert response.status_code == 200
@@ -362,7 +371,7 @@ def test_remove_item_page_deletes_selected_inventory_item(tmp_path):
         product_id = add_item("Catan", "board_game", quantity=5)
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     page = client.get("/remove-item")
     assert page.status_code == 200
@@ -392,7 +401,7 @@ def test_remove_item_rejects_invalid_product_id(tmp_path):
         init_db()
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
 
     response = client.post("/remove-item", data={"product_id": "not-a-number"})
 
@@ -411,7 +420,7 @@ def test_logout_clears_authentication_session(tmp_path):
         init_db()
 
     client = app.test_client()
-    client.post("/login", data={"username": "admin", "password": "admin"})
+    login_as_admin(client)
     response = client.get("/logout", follow_redirects=False)
 
     assert response.status_code == 302
