@@ -109,6 +109,57 @@ def create_app(test_config=None):
             """)
         return render_template("inventory.html", inventory=inventory)
 
+    @app.route("/shipping-control", methods=["GET", "POST"])
+    @login_required
+    def shipping_control_page():
+        if request.method == "POST":
+            try:
+                product_id = int(request.form.get("product_id", ""))
+                low_stock_threshold = int(request.form.get("low_stock_threshold", ""))
+                reorder_amount = int(request.form.get("reorder_amount", ""))
+                if low_stock_threshold < 0 or reorder_amount < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return "Invalid shipping settings", 400
+
+            database = get_db()
+            result = database.execute(
+                """UPDATE inventory
+                SET low_stock_threshold = ?, reorder_amount = ?
+                WHERE product_id = ? AND EXISTS (
+                    SELECT 1 FROM products
+                    WHERE products.product_id = inventory.product_id
+                      AND products.status = 'active'
+                )""",
+                (low_stock_threshold, reorder_amount, product_id),
+            )
+            if result.rowcount == 0:
+                return "Invalid inventory item", 400
+            database.commit()
+            return redirect(
+                url_for("shipping_control_page", product_id=product_id, updated=1)
+            )
+
+        items = query_db("""
+            SELECT products.product_id, products.name,
+                   inventory.low_stock_threshold, inventory.reorder_amount
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            WHERE products.status = 'active'
+            ORDER BY products.name COLLATE NOCASE
+            """)
+        selected_product_id = request.args.get("product_id", type=int)
+        selected_item = next(
+            (item for item in items if item["product_id"] == selected_product_id),
+            items[0] if items else None,
+        )
+        return render_template(
+            "shipping_control.html",
+            items=items,
+            selected_item=selected_item,
+            updated=request.args.get("updated") == "1",
+        )
+
     # Adjust stock from the inventory page.
     @app.post("/adjust-stock")
     @login_required

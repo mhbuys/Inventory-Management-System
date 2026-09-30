@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Shipping Control | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Inventory sections">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
+        <a class="button button-primary" href="{{ url_for('shipping_control_page') }}" aria-current="page">Shipping Control</a>
+    </nav>
+</header>
+
+<main class="page-shell">
+    <section class="inventory-panel" aria-labelledby="shipping-control-title">
+        <div class="inventory-heading">
+            <div>
+                <p class="eyebrow">Stock planning</p>
+                <h1 id="shipping-control-title">Shipping Control</h1>
+                <p class="muted">Set the stock alert point and reorder quantity for an item.</p>
+            </div>
+        </div>
+
+        {% if updated %}
+        <p role="status">Shipping settings saved.</p>
+        {% endif %}
+
+        {% if items %}
+        <form class="shipping-form" method="post">
+            <label for="product_id">Inventory item</label>
+            <select id="product_id" name="product_id" required>
+                {% for item in items %}
+                <option value="{{ item['product_id'] }}"
+                    data-threshold="{{ item['low_stock_threshold'] }}"
+                    data-reorder="{{ item['reorder_amount'] }}"
+                    {% if selected_item and selected_item['product_id'] == item['product_id'] %}selected{% endif %}>
+                    {{ item['name'] }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <label for="low_stock_threshold">Low-stock threshold</label>
+            <input id="low_stock_threshold" name="low_stock_threshold" type="number" min="0" step="1" value="{{ selected_item['low_stock_threshold'] }}" required>
+
+            <label for="reorder_amount">Reorder amount</label>
+            <input id="reorder_amount" name="reorder_amount" type="number" min="0" step="1" value="{{ selected_item['reorder_amount'] }}" required>
+
+            <div class="item-actions">
+                <button class="button button-primary" type="submit">Save settings</button>
+            </div>
+        </form>
+        {% else %}
+        <p class="muted">Add an inventory item before configuring shipping settings.</p>
+        {% endif %}
+    </section>
+</main>
+
+{% if items %}
+<script>
+    const itemSelect = document.getElementById("product_id");
+    const thresholdInput = document.getElementById("low_stock_threshold");
+    const reorderInput = document.getElementById("reorder_amount");
+
+    itemSelect.addEventListener("change", () => {
+        const selectedOption = itemSelect.selectedOptions[0];
+        thresholdInput.value = selectedOption.dataset.threshold;
+        reorderInput.value = selectedOption.dataset.reorder;
+    });
+</script>
+{% endif %}
+{% endblock %}
