@@ -362,7 +362,7 @@ def test_add_item_page_requires_authentication(tmp_path):
     assert b"Add Item" in response.data
 
 
-def test_shipping_control_updates_selected_item_settings(tmp_path):
+def test_stock_planning_updates_selected_item_settings(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -376,13 +376,15 @@ def test_shipping_control_updates_selected_item_settings(tmp_path):
 
     client = app.test_client()
     login_as_admin(client)
-    page = client.get("/shipping-control")
+    page = client.get("/stock-planning")
+    legacy_page = client.get("/shipping-control")
 
     assert page.status_code == 200
-    assert b"Shipping Control" in page.data
+    assert legacy_page.status_code == 200
+    assert b"Stock Planning" in page.data
     assert b"Catan" in page.data
     response = client.post(
-        "/shipping-control",
+        "/stock-planning",
         data={
             "product_id": str(product_id),
             "low_stock_threshold": "4",
@@ -391,7 +393,7 @@ def test_shipping_control_updates_selected_item_settings(tmp_path):
     )
 
     assert response.status_code == 302
-    assert "/shipping-control" in response.headers["Location"]
+    assert "/stock-planning" in response.headers["Location"]
     with app.app_context():
         settings = get_db().execute(
             "SELECT low_stock_threshold, reorder_amount FROM inventory WHERE product_id = ?",
@@ -401,7 +403,7 @@ def test_shipping_control_updates_selected_item_settings(tmp_path):
     assert tuple(settings) == (4, 16)
 
 
-def test_shipping_control_rejects_negative_settings(tmp_path):
+def test_stock_planning_rejects_negative_settings(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -414,7 +416,7 @@ def test_shipping_control_rejects_negative_settings(tmp_path):
     client = app.test_client()
     login_as_admin(client)
     response = client.post(
-        "/shipping-control",
+        "/stock-planning",
         data={
             "product_id": str(product_id),
             "low_stock_threshold": "-1",

@@ -1,32 +1,32 @@
 {% extends "base.html" %}
 
-{% block title %}Shipping Control | Inventory Management System{% endblock %}
+{% block title %}Stock Planning | Inventory Management System{% endblock %}
 
 {% block content %}
 <header class="top-banner">
     <p class="brand">Inventory Management System</p>
     <nav class="banner-actions" aria-label="Inventory sections">
         <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
-        <a class="button button-primary" href="{{ url_for('shipping_control_page') }}" aria-current="page">Shipping Control</a>
+        <a class="button button-primary" href="{{ url_for('stock_planning_page') }}" aria-current="page">Stock Planning</a>
     </nav>
 </header>
 
 <main class="page-shell">
-    <section class="inventory-panel" aria-labelledby="shipping-control-title">
+    <section class="inventory-panel" aria-labelledby="stock-planning-title">
         <div class="inventory-heading">
             <div>
                 <p class="eyebrow">Stock planning</p>
-                <h1 id="shipping-control-title">Shipping Control</h1>
+                <h1 id="stock-planning-title">Stock Planning</h1>
                 <p class="muted">Set the stock alert point and reorder quantity for an item.</p>
             </div>
         </div>
 
         {% if updated %}
-        <p role="status">Shipping settings saved.</p>
+        <p role="status">Stock planning settings saved.</p>
         {% endif %}
 
         {% if items %}
-        <form class="shipping-form" method="post">
+        <form class="stock-planning-form" method="post">
             <label for="product_id">Inventory item</label>
             <select id="product_id" name="product_id" required>
                 {% for item in items %}
@@ -50,7 +50,7 @@
             </div>
         </form>
         {% else %}
-        <p class="muted">Add an inventory item before configuring shipping settings.</p>
+        <p class="muted">Add an inventory item before configuring stock planning settings.</p>
         {% endif %}
     </section>
 </main>

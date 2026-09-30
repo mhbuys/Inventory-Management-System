@@ -109,9 +109,10 @@ def create_app(test_config=None):
             """)
         return render_template("inventory.html", inventory=inventory)
 
-    @app.route("/shipping-control", methods=["GET", "POST"])
+    @app.route("/shipping-control", methods=["GET", "POST"], endpoint="stock_planning_legacy")
+    @app.route("/stock-planning", methods=["GET", "POST"])
     @login_required
-    def shipping_control_page():
+    def stock_planning_page():
         if request.method == "POST":
             try:
                 product_id = int(request.form.get("product_id", ""))
@@ -120,7 +121,7 @@ def create_app(test_config=None):
                 if low_stock_threshold < 0 or reorder_amount < 0:
                     raise ValueError
             except (TypeError, ValueError):
-                return "Invalid shipping settings", 400
+                return "Invalid stock planning settings", 400
 
             database = get_db()
             result = database.execute(
@@ -137,7 +138,7 @@ def create_app(test_config=None):
                 return "Invalid inventory item", 400
             database.commit()
             return redirect(
-                url_for("shipping_control_page", product_id=product_id, updated=1)
+                url_for("stock_planning_page", product_id=product_id, updated=1)
             )
 
         items = query_db("""
@@ -154,7 +155,7 @@ def create_app(test_config=None):
             items[0] if items else None,
         )
         return render_template(
-            "shipping_control.html",
+            "stock_planning.html",
             items=items,
             selected_item=selected_item,
             updated=request.args.get("updated") == "1",
