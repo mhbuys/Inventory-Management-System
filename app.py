@@ -109,6 +109,154 @@ def create_app(test_config=None):
             """)
         return render_template("inventory.html", inventory=inventory)
 
+    # Show queued orders and, when selected, the order form for one low-stock item.
+    @app.get("/reorders")
+    @login_required
+    def reorder_page():
+        database = get_db()
+        selected_item = None
+        selected_product_id = request.args.get("product_id", type=int)
+        if selected_product_id is not None:
+            selected_item = database.execute(
+            """
+            SELECT products.product_id, products.name, inventory.quantity,
+                   inventory.low_stock_threshold, inventory.reorder_amount
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            WHERE products.status = 'active'
+              AND products.product_id = ?
+              AND inventory.quantity <= inventory.low_stock_threshold
+            """,
+            (selected_product_id,),
+            ).fetchone()
+        queued_orders = database.execute(
+            """
+            SELECT reorders.reorder_id, reorders.product_id,
+                   products.name, reorders.quantity_ordered,
+                   reorders.reorder_date, reorders.status
+            FROM reorders
+            JOIN products ON products.product_id = reorders.product_id
+            WHERE reorders.status IN ('pending', 'ordered')
+            ORDER BY reorders.reorder_date DESC, reorders.reorder_id DESC
+            """
+        ).fetchall()
+        return render_template(
+            "reorders.html",
+            selected_item=selected_item,
+            queued_orders=queued_orders,
+        )
+
+    # Queue one reorder using either the configured or a user-entered amount.
+    @app.post("/reorders")
+    @login_required
+    def queue_reorder():
+        try:
+            product_id = int(request.form.get("product_id", ""))
+        except (TypeError, ValueError):
+            return "Invalid inventory item", 400
+
+        database = get_db()
+        item = database.execute(
+            """
+            SELECT products.name, inventory.quantity, inventory.low_stock_threshold,
+                   inventory.reorder_amount
+            FROM products
+            JOIN inventory ON inventory.product_id = products.product_id
+            WHERE products.product_id = ? AND products.status = 'active'
+            """,
+            (product_id,),
+        ).fetchone()
+
+        if item is None:
+            return "Invalid inventory item", 400
+        if item["quantity"] > item["low_stock_threshold"]:
+            return "Item is not currently low in stock", 400
+
+        # The checkbox selects a saved automatic amount; otherwise use the custom quantity.
+        use_automatic_amount = request.form.get("automatic_amount") == "1"
+        if use_automatic_amount:
+            try:
+                quantity_ordered = int(
+                    request.form.get("automatic_reorder_amount", "")
+                )
+            except (TypeError, ValueError):
+                return "Enter a valid automatic reorder amount", 400
+            # Save the selected automatic amount for the next reorder of this item.
+            database.execute(
+                "UPDATE inventory SET reorder_amount = ? WHERE product_id = ?",
+                (quantity_ordered, product_id),
+            )
+        else:
+            try:
+                quantity_ordered = int(request.form.get("quantity_ordered", ""))
+            except (TypeError, ValueError):
+                return "Enter a valid order quantity", 400
+        # Both manual and automatic quantities must satisfy the positive-order constraint.
+        if quantity_ordered <= 0:
+            return "Order quantity must be greater than zero", 400
+
+        active_order = database.execute(
+            """
+            SELECT 1 FROM reorders
+            WHERE product_id = ? AND status IN ('pending', 'ordered')
+            """,
+            (product_id,),
+        ).fetchone()
+        if active_order is not None:
+            return "An active reorder already exists for this item", 409
+
+        database.execute(
+            """
+            INSERT INTO reorders (product_id, quantity_ordered, status)
+            VALUES (?, ?, 'pending')
+            """,
+            (product_id, quantity_ordered),
+        )
+        database.execute(
+            """
+            INSERT INTO event_logs (user_id, event_type, description)
+            VALUES (?, 'reorder_queued', ?)
+            """,
+            (
+                session["user_id"],
+                f"Queued reorder for {item['name']} ({quantity_ordered} units)",
+            ),
+        )
+        database.commit()
+        return redirect(url_for("reorder_page"))
+
+    # Cancel a pending or ordered reorder from the queue.
+    @app.post("/reorders/<int:reorder_id>/cancel")
+    @login_required
+    def cancel_reorder(reorder_id):
+        database = get_db()
+        order = database.execute(
+            """
+            SELECT reorders.reorder_id, products.name
+            FROM reorders
+            JOIN products ON products.product_id = reorders.product_id
+            WHERE reorders.reorder_id = ?
+              AND reorders.status IN ('pending', 'ordered')
+            """,
+            (reorder_id,),
+        ).fetchone()
+        if order is None:
+            return "Queued order not found", 404
+
+        database.execute(
+            "UPDATE reorders SET status = 'cancelled' WHERE reorder_id = ?",
+            (reorder_id,),
+        )
+        database.execute(
+            """
+            INSERT INTO event_logs (user_id, event_type, description)
+            VALUES (?, 'reorder_cancelled', ?)
+            """,
+            (session["user_id"], f"Cancelled reorder for {order['name']}"),
+        )
+        database.commit()
+        return redirect(url_for("reorder_page"))
+
     # Adjust stock from the inventory page.
     @app.post("/adjust-stock")
     @login_required
@@ -273,6 +421,9 @@ def create_app(test_config=None):
                 description=request.form.get("description") or None,
                 price=float(request.form.get("price") or 0),
                 quantity=int(request.form.get("quantity") or 0),
+                low_stock_threshold=int(
+                    request.form.get("low_stock_threshold") or 0
+                ),
             )
             return redirect(url_for("inventory_page"))
         return render_template("add_item.html")
