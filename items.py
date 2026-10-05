@@ -1,4 +1,4 @@
-from database import get_db
+from database import get_db, log_event
 
 
 def add_item(
@@ -31,6 +31,8 @@ def add_item(
             """,
             (product_id, quantity, low_stock_threshold, reorder_amount),
         )
+        # Audit entry is written in the same transaction, so it rolls back if the inserts fail.
+        log_event("item_added", f"Added product {product_id} ({name})")
         # Keep the product and inventory records in the same transaction.
         database.commit()
     except Exception:
