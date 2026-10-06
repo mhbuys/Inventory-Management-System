@@ -52,7 +52,8 @@ def remove_item(product_id):
     )
     if result.rowcount == 0:
         raise ValueError(f"No item found with product ID {product_id}")
-
+        
+    log_event("item_removed", f"Removed product {product_id}")
     database.commit()
 
 
@@ -69,7 +70,11 @@ def update_quantity(product_id, quantity):
     )
     if result.rowcount == 0:
         raise ValueError(f"No item found with product ID {product_id}")
-
+        
+    log_event(
+        "quantity_updated",
+        f"Set product {product_id} quantity to {quantity}",
+    )
     database.commit()
 
 
@@ -95,5 +100,9 @@ def adjust_quantity(product_id, quantity_change):
         if item_exists is None:
             raise ValueError(f"No item found with product ID {product_id}")
         raise ValueError("Stock cannot be negative")
-
+    
+    log_event(
+        "quantity_adjusted",
+        f"Adjusted product {product_id} quantity by {quantity_change}",
+    )
     database.commit()
