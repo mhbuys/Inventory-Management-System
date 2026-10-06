@@ -115,5 +115,8 @@ CREATE INDEX idx_products_status ON products (status);
 CREATE INDEX idx_inventory_transactions_product_id ON inventory_transactions (product_id);
 CREATE INDEX idx_inventory_transactions_user_id ON inventory_transactions (user_id);
 CREATE INDEX idx_reorders_product_id ON reorders (product_id);
+CREATE UNIQUE INDEX idx_active_reorder_per_product
+    ON reorders (product_id)
+    WHERE status IN ('pending', 'ordered');
 CREATE INDEX idx_event_logs_user_id ON event_logs (user_id);
 CREATE INDEX idx_user_backup_codes_user_id ON user_backup_codes (user_id); -- Speeds up backup code lookups during 2FA login - NL

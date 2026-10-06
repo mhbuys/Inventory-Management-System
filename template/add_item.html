@@ -177,11 +177,17 @@
 
             <label>Quantity</label><br>
 
-            <input type="number" name="quantity">
+            <input type="number" name="quantity" min="0" required>
 
         </p>
 
+        <p>
 
+            <label>Low-stock threshold</label><br>
+
+            <input type="number" name="low_stock_threshold" min="0" value="0" required>
+
+        </p>
 
         <button type="submit">Add Item</button>
 
@@ -198,4 +204,3 @@
 </body>
 
 </html>
-

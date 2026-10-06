@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Reorder Queue | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Reorder actions">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
+        <a class="button button-quiet" href="{{ url_for('account_2fa_page') }}">Security</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page-shell">
+    {% if selected_item %}
+    <section class="inventory-panel" aria-labelledby="reorder-item-title">
+        <div class="inventory-heading">
+            <div>
+                <p class="eyebrow">Create order</p>
+                <h1 id="reorder-item-title">{{ selected_item["name"] }}</h1>
+                <p class="muted">
+                    {{ selected_item["quantity"] }} units in stock;
+                    low-stock threshold is {{ selected_item["low_stock_threshold"] }}.
+                </p>
+            </div>
+            <span class="status status-low">LOW STOCK</span>
+        </div>
+
+        <form method="post" action="{{ url_for('queue_reorder') }}" id="reorder-form">
+            <input type="hidden" name="product_id" value="{{ selected_item['product_id'] }}">
+            <label for="quantity-ordered">Custom order quantity</label>
+            <input id="quantity-ordered" name="quantity_ordered" type="number"
+                   min="1" step="1" value="{{ selected_item['reorder_amount'] or 1 }}" required>
+            <label for="automatic-amount">
+                <input id="automatic-amount" type="checkbox" name="automatic_amount" value="1">
+                Use automatic reorder amount
+            </label>
+            <div id="automatic-amount-fields" hidden>
+                <label for="automatic-reorder-amount">Automatic reorder amount</label>
+                <input id="automatic-reorder-amount" name="automatic_reorder_amount"
+                       type="number" min="1" step="1"
+                       value="{{ selected_item['reorder_amount'] or 1 }}">
+                <p class="muted">This amount will be saved for future automatic reorders of this item.</p>
+            </div>
+            <div class="item-actions">
+                <button class="button button-primary" type="submit">Queue order</button>
+                <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Back to queued orders</a>
+            </div>
+        </form>
+    </section>
+    {% endif %}
+
+    <section class="inventory-panel" aria-labelledby="queued-orders-title">
+        <div class="inventory-heading">
+            <div>
+                <p class="eyebrow">Pending work</p>
+                <h2 id="queued-orders-title">Queued orders</h2>
+                <p class="muted">Orders waiting to be placed or received. Low-stock alerts remain on Inventory.</p>
+            </div>
+            <span class="status">{{ queued_orders|length }} active orders</span>
+        </div>
+
+        <div class="inventory-list">
+            {% for order in queued_orders %}
+            <article class="inventory-row">
+                <div>
+                    <strong>{{ order["name"] }}</strong>
+                    <span class="muted">
+                        {{ order["quantity_ordered"] }} units
+                        | queued {{ order["reorder_date"] }}
+                    </span>
+                </div>
+                <div class="item-actions">
+                    <span class="status">{{ order["status"] }}</span>
+                    <form method="post" action="{{ url_for('cancel_reorder', reorder_id=order['reorder_id']) }}">
+                        <button class="button button-danger" type="submit">Cancel order</button>
+                    </form>
+                </div>
+            </article>
+            {% else %}
+            <p class="muted">No queued orders.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+<script>
+    const automaticAmount = document.getElementById("automatic-amount");
+    const automaticAmountFields = document.getElementById("automatic-amount-fields");
+    const customQuantity = document.getElementById("quantity-ordered");
+    const automaticQuantity = document.getElementById("automatic-reorder-amount");
+    // Keep the user's custom quantity available when automatic ordering is turned off.
+    let previousCustomQuantity = customQuantity ? customQuantity.value : "";
+
+    function toggleAutomaticAmount() {
+        const automaticSelected = automaticAmount.checked;
+        automaticAmountFields.hidden = !automaticSelected;
+        customQuantity.required = !automaticSelected;
+        automaticQuantity.required = automaticSelected;
+        if (automaticSelected) {
+            // Mirror the configured automatic amount into the submitted quantity field.
+            previousCustomQuantity = customQuantity.value;
+            customQuantity.value = automaticQuantity.value;
+        } else {
+            // Restore the manual quantity so switching modes does not discard user input.
+            customQuantity.value = previousCustomQuantity || customQuantity.value;
+        }
+    }
+
+    if (automaticAmount) {
+        automaticAmount.addEventListener("change", toggleAutomaticAmount);
+        automaticQuantity.addEventListener("input", () => {
+            if (automaticAmount.checked) {
+                // Keep both visible values aligned while the automatic amount is edited.
+                customQuantity.value = automaticQuantity.value;
+            }
+        });
+    }
+</script>
+{% endblock %}
