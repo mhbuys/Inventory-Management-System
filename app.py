@@ -161,7 +161,7 @@ def create_app(test_config=None):
             updated=request.args.get("updated") == "1",
         )
 
-        # Show queued orders and, when selected, the order form for one low-stock item.
+    # Show queued orders and, when selected, the order form for one low-stock item.
     @app.get("/reorders")
     @login_required
     def reorder_page():
