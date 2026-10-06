@@ -553,6 +553,71 @@ def test_add_item_page_requires_authentication(tmp_path):
     assert b"Add Item" in response.data
 
 
+def test_stock_planning_updates_selected_item_settings(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan", "board_game", low_stock_threshold=2, reorder_amount=8
+        )
+
+    client = app.test_client()
+    login_as_admin(client)
+    page = client.get("/stock-planning")
+    legacy_page = client.get("/shipping-control")
+
+    assert page.status_code == 200
+    assert legacy_page.status_code == 200
+    assert b"Stock Planning" in page.data
+    assert b"Catan" in page.data
+    response = client.post(
+        "/stock-planning",
+        data={
+            "product_id": str(product_id),
+            "low_stock_threshold": "4",
+            "reorder_amount": "16",
+        },
+    )
+
+    assert response.status_code == 302
+    assert "/stock-planning" in response.headers["Location"]
+    with app.app_context():
+        settings = get_db().execute(
+            "SELECT low_stock_threshold, reorder_amount FROM inventory WHERE product_id = ?",
+            (product_id,),
+        ).fetchone()
+
+    assert tuple(settings) == (4, 16)
+
+
+def test_stock_planning_rejects_negative_settings(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item("Catan", "board_game")
+
+    client = app.test_client()
+    login_as_admin(client)
+    response = client.post(
+        "/stock-planning",
+        data={
+            "product_id": str(product_id),
+            "low_stock_threshold": "-1",
+            "reorder_amount": "10",
+        },
+    )
+
+    assert response.status_code == 400
+
+
 # Verify that the browser can remove a selected database item through the route.
 def test_remove_item_page_deletes_selected_inventory_item(tmp_path):
     database_path = tmp_path / "inventory.db"
