@@ -101,7 +101,13 @@ def create_app(test_config=None):
         inventory = query_db("""
             SELECT products.product_id, products.name, products.category,
                    products.price, inventory.quantity,
-                   inventory.low_stock_threshold
+                   inventory.low_stock_threshold,
+                                     (SELECT reorders.quantity_ordered
+                                        FROM reorders
+                                        WHERE reorders.product_id = products.product_id
+                                            AND reorders.status = 'pending'
+                                        ORDER BY reorders.reorder_id
+                                        LIMIT 1) AS pending_order_quantity
             FROM products
             JOIN inventory ON inventory.product_id = products.product_id
             WHERE products.status = 'active'
@@ -319,7 +325,7 @@ def create_app(test_config=None):
             quantity_change = int(request.form.get("quantity_change", ""))
             if quantity_change == 0:
                 raise ValueError("Invalid quantity change")
-            adjust_quantity(product_id, quantity_change)
+            adjust_quantity(product_id, quantity_change, session["user_id"])
         except (TypeError, ValueError) as error:
             return str(error), 400
 
@@ -476,6 +482,7 @@ def create_app(test_config=None):
                 low_stock_threshold=int(
                     request.form.get("low_stock_threshold") or 0
                 ),
+                user_id=session["user_id"],
             )
             return redirect(url_for("inventory_page"))
         return render_template("add_item.html")

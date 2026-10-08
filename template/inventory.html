@@ -37,7 +37,11 @@
                     </span>
                 </div>
 
-                {% if item["quantity"] <= item["low_stock_threshold"] %}
+                {% if item["pending_order_quantity"] is not none %}
+                <span class="status status-low">
+                    LOW STOCK: {{ item["quantity"] }} units — ORDER PENDING: {{ item["pending_order_quantity"] }} units
+                </span>
+                {% elif item["quantity"] <= item["low_stock_threshold"] %}
                 <a class="status status-low" href="{{ url_for('reorder_page', product_id=item['product_id']) }}">
                     LOW STOCK: {{ item["quantity"] }} units — reorder
                 </a>

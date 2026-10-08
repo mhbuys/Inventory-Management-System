@@ -64,12 +64,31 @@ This document describes the current item-management functions and where readers 
 - **Database behavior:** Updates the quantity atomically and commits the change immediately.
 - **Errors:** Raises `ValueError` for a missing product, a zero or non-integer change, or an adjustment that would make stock negative.
 
+## Automatic low-stock reorders
+
+- **Location:** `items.py` (`queue_low_stock_reorder`)
+- **Purpose:** Automatically creates a pending reorder when an active item's quantity
+  decreases from above its low-stock threshold to at or below the threshold.
+- **Trigger points:** A quantity decrease that crosses the threshold. Creating an item,
+  changing its reorder settings, or making further quantity changes while it remains low
+  does not automatically queue another order.
+- **Order quantity:** Uses the item's configured `reorder_amount`. Items configured
+  with an amount of `0` are never automatically ordered.
+- **Duplicate prevention:** An existing pending or ordered reorder prevents another
+  automatic order for the same item. After stock rises above the threshold, a later
+  downward crossing can queue a new order. The order and audit event are saved in the
+  same transaction as the quantity change.
+
 ## `inventory_page`
 
 - **Location:** `app.py` (`inventory_page`)
 - **Purpose:** Displays all active inventory items and their current stock levels.
 - **Low-stock behavior:** Items at or below `low_stock_threshold` display a bold red
   low-stock alert. Selecting the alert opens the reorder workflow for that product.
+  When a quantity decrease crosses into low stock, a pending order is automatically
+  queued if its configured reorder amount is greater than zero.
+- **Pending-order behavior:** Items with a pending reorder display the pending order
+  quantity in place of the low-stock reorder link.
 - **Access:** Requires an authenticated user.
 
 ## `reorder_page`
