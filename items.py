@@ -1,4 +1,4 @@
-from database import get_db
+from database import get_db, log_event
 
 
 def add_item(
@@ -31,6 +31,8 @@ def add_item(
             """,
             (product_id, quantity, low_stock_threshold, reorder_amount),
         )
+        # Audit entry is written in the same transaction, so it rolls back if the inserts fail.
+        log_event("item_added", f"Added product {product_id} ({name})")
         # Keep the product and inventory records in the same transaction.
         database.commit()
     except Exception:
@@ -50,7 +52,8 @@ def remove_item(product_id):
     )
     if result.rowcount == 0:
         raise ValueError(f"No item found with product ID {product_id}")
-
+        
+    log_event("item_removed", f"Removed product {product_id}")
     database.commit()
 
 
@@ -67,7 +70,11 @@ def update_quantity(product_id, quantity):
     )
     if result.rowcount == 0:
         raise ValueError(f"No item found with product ID {product_id}")
-
+        
+    log_event(
+        "quantity_updated",
+        f"Set product {product_id} quantity to {quantity}",
+    )
     database.commit()
 
 
@@ -93,5 +100,9 @@ def adjust_quantity(product_id, quantity_change):
         if item_exists is None:
             raise ValueError(f"No item found with product ID {product_id}")
         raise ValueError("Stock cannot be negative")
-
+    
+    log_event(
+        "quantity_adjusted",
+        f"Adjusted product {product_id} quantity by {quantity_change}",
+    )
     database.commit()
