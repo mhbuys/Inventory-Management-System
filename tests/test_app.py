@@ -209,6 +209,64 @@ def test_login_page_is_reachable_without_authentication(tmp_path):
     assert b"Please log in" in response.data
 
 
+def test_user_creation_assigns_temporary_password(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    # The generated credential should be usable once, while the database stores
+    # only its hash and marks the account for a required password change.
+    client = app.test_client()
+    response = client.post("/sign-in", data={"username": "new-user"})
+    page = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Temporary password. Save it now" in page
+    temporary_password = page.split(
+        '<div class="credentials" role="status">', 1
+    )[1].split("<strong>", 1)[1].split("</strong>", 1)[0]
+    assert len(temporary_password) == 12
+
+    with app.app_context():
+        user = get_db().execute(
+            "SELECT password_hash, must_change_password FROM users WHERE username = ?",
+            ("new-user",),
+        ).fetchone()
+    assert user["password_hash"] != temporary_password
+    assert user["must_change_password"] == 1
+
+    login_response = client.post(
+        "/login",
+        data={"username": "new-user", "password": temporary_password},
+        follow_redirects=False,
+    )
+    assert login_response.status_code == 302
+    assert login_response.headers["Location"] == "/account/change-password"
+
+
+def test_user_creation_rejects_duplicate_name(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    # User names are unique, so a duplicate submission must not create another
+    # account or expose a second temporary password.
+    client = app.test_client()
+    client.post("/sign-in", data={"username": "new-user"})
+    response = client.post("/sign-in", data={"username": "new-user"})
+
+    assert response.status_code == 409
+    assert b"already in use" in response.data
+
+
 # This verifies the seeded admin login succeeds for the browser and protected routes.
 def test_default_admin_user_can_login(tmp_path):
     database_path = tmp_path / "inventory.db"
