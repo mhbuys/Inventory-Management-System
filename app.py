@@ -2,6 +2,7 @@ import base64
 import io
 import os
 import secrets
+import sqlite3
 from datetime import timedelta
 from functools import wraps
 
@@ -14,6 +15,7 @@ from database import close_db, get_db, init_db, query_db
 from items import add_item, adjust_quantity, remove_item
 
 BACKUP_CODE_COUNT = 8  # Number of one-time backup codes issued per user - NL
+TEMPORARY_PASSWORD_LENGTH = 12
 
 
 # Render a TOTP provisioning URI as a base64 PNG the browser can show inline. - NL
@@ -369,6 +371,60 @@ def create_app(test_config=None):
 
         return render_template("login.html", error="Invalid username or password"), 401
 
+    # Create a user with a one-time temporary password shown only after registration.
+    @app.route("/sign-in", methods=["GET", "POST"])
+    def sign_page():
+        if session.get("user_id"):
+            return redirect(url_for("inventory_page"))
+
+        if request.method == "GET":
+            return render_template("Sign_in.html", error=None, temporary_password=None)
+
+        # Normalize the name before validation so accidental outer spaces do not
+        # create a second account that looks identical to the user.
+        username = request.form.get("username", "").strip()
+        if not username:
+            return render_template(
+                "Sign_in.html",
+                error="Enter a user name to create the account.",
+                temporary_password=None,
+            ), 400
+
+        if len(username) > 80:
+            return render_template(
+                "Sign_in.html",
+                error="User name must be 80 characters or fewer.",
+                temporary_password=None,
+            ), 400
+
+        # Keep the plaintext temporary password only long enough to display it
+        # once; the database receives a one-way hash instead.
+        temporary_password = secrets.token_urlsafe(TEMPORARY_PASSWORD_LENGTH)[
+            :TEMPORARY_PASSWORD_LENGTH
+        ]
+        database = get_db()
+        try:
+            # New accounts must replace this temporary credential after login.
+            database.execute(
+                """INSERT INTO users (username, password_hash, must_change_password)
+                VALUES (?, ?, 1)""",
+                (username, generate_password_hash(temporary_password)),
+            )
+            database.commit()
+        except sqlite3.IntegrityError:
+            return render_template(
+                "Sign_in.html",
+                error="That user name is already in use.",
+                temporary_password=None,
+            ), 409
+
+        return render_template(
+            "Sign_in.html",
+            error=None,
+            temporary_password=temporary_password,
+            username=username,
+        )
+
     # Show the authenticator code prompt for a password-verified, pending login. - NL
     @app.get("/login/2fa")
     def verify_2fa_page():
@@ -442,6 +498,7 @@ def create_app(test_config=None):
         if request.endpoint in {
             "login",
             "login_page",
+            "sign_page",
             "logout",
             "verify_2fa_page",
             "verify_2fa",
