@@ -218,34 +218,46 @@ def test_user_creation_assigns_temporary_password(tmp_path):
     with app.app_context():
         init_db()
 
-    # The generated credential should be usable once, while the database stores
-    # only its hash and marks the account for a required password change.
-    client = app.test_client()
-    response = client.post("/sign-in", data={"username": "new-user"})
+    # User creation is a internal admin function.
+    admin_client = app.test_client()
+    login_as_admin(admin_client)
+    response = admin_client.post("/sign-in", data={"username": "new-user"})
     page = response.get_data(as_text=True)
 
     assert response.status_code == 200
     assert "Temporary password. Save it now" in page
-    temporary_password = page.split(
-        '<div class="credentials" role="status">', 1
-    )[1].split("<strong>", 1)[1].split("</strong>", 1)[0]
+    temporary_password = (
+        page.split('<div class="credentials" role="status">', 1)[1]
+        .split("<strong>", 1)[1]
+        .split("</strong>", 1)[0]
+    )
     assert len(temporary_password) == 12
 
     with app.app_context():
-        user = get_db().execute(
-            "SELECT password_hash, must_change_password FROM users WHERE username = ?",
-            ("new-user",),
-        ).fetchone()
+        user = (
+            get_db()
+            .execute(
+                "SELECT password_hash, must_change_password FROM users WHERE username = ?",
+                ("new-user",),
+            )
+            .fetchone()
+        )
     assert user["password_hash"] != temporary_password
     assert user["must_change_password"] == 1
 
-    login_response = client.post(
+    user_client = app.test_client()
+    login_response = user_client.post(
         "/login",
         data={"username": "new-user", "password": temporary_password},
         follow_redirects=False,
     )
     assert login_response.status_code == 302
-    assert login_response.headers["Location"] == "/account/change-password"
+    assert login_response.headers["Location"] == "/account/2fa"
+    assert user_client.get("/account/2fa").status_code == 302
+    assert (
+        user_client.get("/account/2fa").headers["Location"]
+        == "/account/change-password"
+    )
 
 
 def test_user_creation_rejects_duplicate_name(tmp_path):
@@ -259,12 +271,46 @@ def test_user_creation_rejects_duplicate_name(tmp_path):
 
     # User names are unique, so a duplicate submission must not create another
     # account or expose a second temporary password.
-    client = app.test_client()
-    client.post("/sign-in", data={"username": "new-user"})
-    response = client.post("/sign-in", data={"username": "new-user"})
+    admin_client = app.test_client()
+    login_as_admin(admin_client)
+    admin_client.post("/sign-in", data={"username": "new-user"})
+    response = admin_client.post("/sign-in", data={"username": "new-user"})
 
     assert response.status_code == 409
     assert b"already in use" in response.data
+
+
+def test_user_creation_requires_login(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    response = client.get("/sign-in", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+
+
+def test_inventory_top_bar_links_to_user_creation(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    login_as_admin(client)
+    page = client.get("/").get_data(as_text=True)
+
+    assert 'href="/sign-in"' in page
+    assert "Create user" in page
 
 
 # This verifies the seeded admin login succeeds for the browser and protected routes.
@@ -397,7 +443,9 @@ def test_inventory_page_adjusts_stock_by_requested_amount(tmp_path):
         )
 
 
-def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order(tmp_path):
+def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order(
+    tmp_path,
+):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -418,7 +466,7 @@ def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order
     inventory_page = client.get("/")
     page = client.get(f"/reorders?product_id={product_id}")
 
-    assert b'LOW STOCK: 1 units' in inventory_page.data
+    assert b"LOW STOCK: 1 units" in inventory_page.data
     assert f"/reorders?product_id={product_id}".encode() in inventory_page.data
     assert page.status_code == 200
     assert b"Catan" in page.data
@@ -436,14 +484,18 @@ def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order
     assert response.status_code == 302
     assert response.headers["Location"] == "/reorders"
     with app.app_context():
-        order = get_db().execute(
-            """
+        order = (
+            get_db()
+            .execute(
+                """
             SELECT product_id, quantity_ordered, status
             FROM reorders
             WHERE product_id = ?
             """,
-            (product_id,),
-        ).fetchone()
+                (product_id,),
+            )
+            .fetchone()
+        )
 
     assert tuple(order) == (product_id, 10, "pending")
 
@@ -466,10 +518,13 @@ def test_reorder_page_prevents_duplicate_active_orders(tmp_path):
 
     client = app.test_client()
     login_as_admin(client)
-    assert client.post(
-        "/reorders",
-        data={"product_id": product_id, "quantity_ordered": "7"},
-    ).status_code == 302
+    assert (
+        client.post(
+            "/reorders",
+            data={"product_id": product_id, "quantity_ordered": "7"},
+        ).status_code
+        == 302
+    )
     duplicate = client.post(
         "/reorders",
         data={"product_id": product_id, "quantity_ordered": "7"},
@@ -504,10 +559,14 @@ def test_reorder_page_accepts_custom_order_amount(tmp_path):
 
     assert response.status_code == 302
     with app.app_context():
-        quantity_ordered = get_db().execute(
-            "SELECT quantity_ordered FROM reorders WHERE product_id = ?",
-            (product_id,),
-        ).fetchone()[0]
+        quantity_ordered = (
+            get_db()
+            .execute(
+                "SELECT quantity_ordered FROM reorders WHERE product_id = ?",
+                (product_id,),
+            )
+            .fetchone()[0]
+        )
 
     assert quantity_ordered == 7
 
@@ -535,20 +594,28 @@ def test_queued_order_can_be_cancelled(tmp_path):
         data={"product_id": product_id, "quantity_ordered": "7"},
     )
     with app.app_context():
-        reorder_id = get_db().execute(
-            "SELECT reorder_id FROM reorders WHERE product_id = ?",
-            (product_id,),
-        ).fetchone()[0]
+        reorder_id = (
+            get_db()
+            .execute(
+                "SELECT reorder_id FROM reorders WHERE product_id = ?",
+                (product_id,),
+            )
+            .fetchone()[0]
+        )
 
     response = client.post(f"/reorders/{reorder_id}/cancel")
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/reorders"
     with app.app_context():
-        status = get_db().execute(
-            "SELECT status FROM reorders WHERE reorder_id = ?",
-            (reorder_id,),
-        ).fetchone()[0]
+        status = (
+            get_db()
+            .execute(
+                "SELECT status FROM reorders WHERE reorder_id = ?",
+                (reorder_id,),
+            )
+            .fetchone()[0]
+        )
 
     assert status == "cancelled"
 
@@ -644,10 +711,14 @@ def test_stock_planning_updates_selected_item_settings(tmp_path):
     assert response.status_code == 302
     assert "/stock-planning" in response.headers["Location"]
     with app.app_context():
-        settings = get_db().execute(
-            "SELECT low_stock_threshold, reorder_amount FROM inventory WHERE product_id = ?",
-            (product_id,),
-        ).fetchone()
+        settings = (
+            get_db()
+            .execute(
+                "SELECT low_stock_threshold, reorder_amount FROM inventory WHERE product_id = ?",
+                (product_id,),
+            )
+            .fetchone()
+        )
 
     assert tuple(settings) == (4, 16)
 
