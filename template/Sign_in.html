@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Create user | Inventory Management System{% endblock %}
+
+{% block content %}
+<style>
+            :root {
+                --ink: #24313b;
+                --muted: #6d7a83;
+                --line: #dbe3e6;
+                --paper: #f7faf9;
+                --surface: #ffffff;
+                --accent: #216e68;
+                --accent-dark: #174d4a;
+                --danger: #a84848;
+                --success: #216e68;
+            }
+
+            * { box-sizing: border-box; }
+            body {
+                min-height: 100vh;
+                margin: 0;
+                color: var(--ink);
+                background: var(--paper);
+                font-family: Georgia, "Times New Roman", serif;
+            }
+            .page button, .page input { font: inherit; }
+            .page {
+                display: grid;
+                place-items: center;
+                min-height: 100vh;
+                padding: 2rem 1rem;
+            }
+            .panel {
+                width: min(440px, 100%);
+                padding: clamp(2rem, 6vw, 3rem);
+                background: var(--surface);
+                border-top: 4px solid var(--accent);
+                box-shadow: 0 18px 45px rgba(36, 49, 59, .1);
+            }
+            .eyebrow {
+                margin: 0 0 .6rem;
+                color: var(--accent);
+                font: 700 .75rem/1.2 Arial, sans-serif;
+                letter-spacing: .14em;
+                text-transform: uppercase;
+            }
+            h1 { margin: 0 0 .5rem; font-size: 2rem; }
+            .muted { color: var(--muted); line-height: 1.5; }
+            label {
+                display: block;
+                margin: 1.15rem 0 .35rem;
+                font: 700 .85rem Arial, sans-serif;
+            }
+            .page input {
+                width: 100%;
+                border: 1px solid var(--line);
+                border-radius: 3px;
+                padding: .75rem;
+                color: var(--ink);
+                background: #ffffff;
+            }
+            .page input:focus { outline: 2px solid #8eb8b1; outline-offset: 2px; }
+            .page .button {
+                width: 100%;
+                margin-top: 1.35rem;
+                border: 1px solid transparent;
+                border-radius: 4px;
+                padding: .7rem .85rem;
+                color: #ffffff;
+                background: var(--accent);
+                cursor: pointer;
+                font-size: .95rem;
+            }
+            .page .button:hover, .page .button:focus-visible { background: var(--accent-dark); }
+            .message { line-height: 1.5; }
+            .error { color: var(--danger); }
+            .credentials {
+                margin: 1.25rem 0;
+                padding: 1rem;
+                border-left: 4px solid var(--success);
+                background: #eef7f4;
+            }
+            .credentials strong {
+                display: block;
+                margin-top: .25rem;
+                font: 700 1.15rem/1.4 Consolas, monospace;
+                overflow-wrap: anywhere;
+            }
+            .back-link {
+                display: inline-block;
+                margin-top: 1.25rem;
+                color: var(--accent-dark);
+                font: 700 .85rem Arial, sans-serif;
+                text-decoration: none;
+            }
+            .back-link:hover, .back-link:focus-visible { text-decoration: underline; }
+        </style>
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Inventory actions">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
+        <a class="button button-primary" href="{{ url_for('sign_page') }}">Create user</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page">
+    <section class="panel" aria-labelledby="create-account-title">
+        <p class="eyebrow">User administration</p>
+        <h1 id="create-account-title">Create a user account</h1>
+                {% if temporary_password %}
+                <!-- A generated password is shown only on this successful response. -->
+                <p class="message">The account for <strong>{{ username }}</strong> is ready.</p>
+                <div class="credentials" role="status">
+                    <span>Temporary password. Save it now; it will not be shown again.</span>
+                    <strong>{{ temporary_password }}</strong>
+                </div>
+                <p class="muted">Sign in with this password. You will be required to choose a new password before continuing.</p>
+                <a class="back-link" href="{{ url_for('inventory_page') }}">Return to inventory</a>
+                {% else %}
+                <p class="muted">Enter a team member's name. The system will assign a temporary password for their first sign-in.</p>
+                {% if error %}
+                <!-- Validation and duplicate-name errors are returned without creating an account. -->
+                <p class="message error" role="alert">{{ error }}</p>
+                {% endif %}
+                <!-- The server generates the password after this form is submitted. -->
+                <form action="{{ url_for('sign_page') }}" method="post">
+                    <label for="username">User name</label>
+                    <input id="username" name="username" type="text" maxlength="80" autocomplete="username" required>
+                    <button class="button" type="submit">Create account</button>
+                </form>
+                <a class="back-link" href="{{ url_for('inventory_page') }}">Back to inventory</a>
+                {% endif %}
+    </section>
+</main>
+{% endblock %}

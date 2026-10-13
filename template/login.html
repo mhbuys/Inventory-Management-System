@@ -75,7 +75,7 @@
             input:focus { outline: 2px solid #8eb8b1; outline-offset: 2px; }
             .button {
                 width: 100%;
-                margin-top: 1.35rem;
+                display: block;
                 border: 1px solid transparent;
                 border-radius: 4px;
                 padding: .7rem .85rem;
@@ -83,14 +83,31 @@
                 background: var(--accent);
                 cursor: pointer;
                 font-size: .95rem;
+                text-align: center;
+                text-decoration: none;
             }
             .button:hover, .button:focus-visible { background: var(--accent-dark); }
-            .back-link {
-                display: inline-block;
-                margin-top: 1.25rem;
+            .login-actions {
+                display: grid;
+                gap: .7rem;
+                margin-top: 1.35rem;
+            }
+            .button-secondary {
                 color: var(--accent-dark);
-                font: 700 .85rem Arial, sans-serif;
+                background: transparent;
+                border-color: var(--line);
+            }
+            .button-secondary:hover, .button-secondary:focus-visible {
+                color: var(--accent-dark);
+                background: #eef7f4;
+                border-color: #8eb8b1;
+            }
+            .account-prompt {
+                margin: .25rem 0 0;
+                color: var(--accent-dark);
+                font: .8rem Arial, sans-serif;
                 text-decoration: none;
+                text-align: center;
             }
             @media (max-width: 680px) {
                 .login-layout { grid-template-columns: 1fr; }
@@ -127,10 +144,10 @@
                         <input id="username" name="username" type="text" autocomplete="username" required>
                         <label for="password">Password</label>
                         <input id="password" name="password" type="password" autocomplete="current-password" required>
-                        <button class="button" type="submit">Log in</button>
+                        <div class="login-actions">
+                            <button class="button" type="submit">Log in</button>
+                        </div>
                     </form>
-                    <!-- The return link keeps the basic page flow consistent. -->
-                    <a class="back-link" href="{{ url_for('login_page') }}">Return to inventory preview</a>
                 </div>
             </section>
         </main>
