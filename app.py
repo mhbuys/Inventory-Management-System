@@ -373,10 +373,8 @@ def create_app(test_config=None):
 
     # Create a user with a one-time temporary password shown only after registration.
     @app.route("/sign-in", methods=["GET", "POST"])
+    @login_required
     def sign_page():
-        if session.get("user_id"):
-            return redirect(url_for("inventory_page"))
-
         if request.method == "GET":
             return render_template("Sign_in.html", error=None, temporary_password=None)
 
