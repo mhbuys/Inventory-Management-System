@@ -1,10 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Create account | Inventory Management System</title>
-        <style>
+{% extends "base.html" %}
+
+{% block title %}Create user | Inventory Management System{% endblock %}
+
+{% block content %}
+<style>
             :root {
                 --ink: #24313b;
                 --muted: #6d7a83;
@@ -25,7 +24,7 @@
                 background: var(--paper);
                 font-family: Georgia, "Times New Roman", serif;
             }
-            button, input { font: inherit; }
+            .page button, .page input { font: inherit; }
             .page {
                 display: grid;
                 place-items: center;
@@ -53,7 +52,7 @@
                 margin: 1.15rem 0 .35rem;
                 font: 700 .85rem Arial, sans-serif;
             }
-            input {
+            .page input {
                 width: 100%;
                 border: 1px solid var(--line);
                 border-radius: 3px;
@@ -61,8 +60,8 @@
                 color: var(--ink);
                 background: #ffffff;
             }
-            input:focus { outline: 2px solid #8eb8b1; outline-offset: 2px; }
-            .button {
+            .page input:focus { outline: 2px solid #8eb8b1; outline-offset: 2px; }
+            .page .button {
                 width: 100%;
                 margin-top: 1.35rem;
                 border: 1px solid transparent;
@@ -73,7 +72,7 @@
                 cursor: pointer;
                 font-size: .95rem;
             }
-            .button:hover, .button:focus-visible { background: var(--accent-dark); }
+            .page .button:hover, .page .button:focus-visible { background: var(--accent-dark); }
             .message { line-height: 1.5; }
             .error { color: var(--danger); }
             .credentials {
@@ -97,12 +96,19 @@
             }
             .back-link:hover, .back-link:focus-visible { text-decoration: underline; }
         </style>
-    </head>
-    <body>
-        <main class="page">
-            <section class="panel" aria-labelledby="create-account-title">
-                <p class="eyebrow">Inventory Management System</p>
-                <h1 id="create-account-title">Create a user account</h1>
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Inventory actions">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
+        <a class="button button-primary" href="{{ url_for('sign_page') }}">Create user</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page">
+    <section class="panel" aria-labelledby="create-account-title">
+        <p class="eyebrow">User administration</p>
+        <h1 id="create-account-title">Create a user account</h1>
                 {% if temporary_password %}
                 <!-- A generated password is shown only on this successful response. -->
                 <p class="message">The account for <strong>{{ username }}</strong> is ready.</p>
@@ -111,9 +117,9 @@
                     <strong>{{ temporary_password }}</strong>
                 </div>
                 <p class="muted">Sign in with this password. You will be required to choose a new password before continuing.</p>
-                <a class="back-link" href="{{ url_for('login_page') }}">Continue to sign in</a>
+                <a class="back-link" href="{{ url_for('inventory_page') }}">Return to inventory</a>
                 {% else %}
-                <p class="muted">Enter the user's name. The system will assign a temporary password for the first sign-in.</p>
+                <p class="muted">Enter a team member's name. The system will assign a temporary password for their first sign-in.</p>
                 {% if error %}
                 <!-- Validation and duplicate-name errors are returned without creating an account. -->
                 <p class="message error" role="alert">{{ error }}</p>
@@ -124,9 +130,8 @@
                     <input id="username" name="username" type="text" maxlength="80" autocomplete="username" required>
                     <button class="button" type="submit">Create account</button>
                 </form>
-                <a class="back-link" href="{{ url_for('login_page') }}">Back to sign in</a>
+                <a class="back-link" href="{{ url_for('inventory_page') }}">Back to inventory</a>
                 {% endif %}
-            </section>
-        </main>
-    </body>
-</html>
+    </section>
+</main>
+{% endblock %}
