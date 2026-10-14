@@ -11,8 +11,10 @@ import qrcode
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import close_db, get_db, init_db, query_db
+from database import close_db, get_db, init_db, log_event, query_db
 from items import add_item, adjust_quantity, remove_item
+
+ROLE_NAMES = ("admin", "manager", "employee", "viewer")
 
 BACKUP_CODE_COUNT = 8  # Number of one-time backup codes issued per user - NL
 TEMPORARY_PASSWORD_LENGTH = 12
@@ -66,6 +68,37 @@ def create_app(test_config=None):
 
         return wrapped_view
 
+    # Look up the signed-in user's role each request so role changes apply immediately.
+    def current_role():
+        row = get_db().execute(
+            """SELECT roles.role_name FROM user_roles
+            JOIN roles ON roles.role_id = user_roles.role_id
+            WHERE user_roles.user_id = ?""",
+            (session.get("user_id"),),
+        ).fetchone()
+        return row["role_name"] if row else "viewer"
+
+    # Require login plus one of the listed roles; others get 403.
+    def role_required(*allowed_roles):
+        def decorator(view):
+            @wraps(view)
+            def wrapped_view(*args, **kwargs):
+                if not session.get("user_id"):
+                    return redirect(url_for("login_page"))
+                if current_role() not in allowed_roles:
+                    return "You do not have permission to access this page", 403
+                return view(*args, **kwargs)
+
+            return wrapped_view
+
+        return decorator
+
+    @app.context_processor
+    def inject_role():
+        if session.get("user_id"):
+            return {"current_role": current_role()}
+        return {"current_role": None}
+
     # Complete a login by populating the permanent session. - NL
     def finish_login(user_id, username, must_change_password):
         session.clear()
@@ -92,6 +125,11 @@ def create_app(test_config=None):
                     "UPDATE user_backup_codes SET used_at = CURRENT_TIMESTAMP WHERE backup_code_id = ?",
                     (candidate["backup_code_id"],),
                 )
+                log_event(
+                    "backup_code_used",
+                    "Used a two-factor authentication backup code",
+                    user_id=user_id,
+                )
                 database.commit()
                 return True
 
@@ -113,7 +151,7 @@ def create_app(test_config=None):
 
     @app.route("/shipping-control", methods=["GET", "POST"], endpoint="stock_planning_legacy")
     @app.route("/stock-planning", methods=["GET", "POST"])
-    @login_required
+    @role_required("admin", "manager")
     def stock_planning_page():
         if request.method == "POST":
             try:
@@ -165,7 +203,7 @@ def create_app(test_config=None):
 
     # Show queued orders and, when selected, the order form for one low-stock item.
     @app.get("/reorders")
-    @login_required
+    @role_required("admin", "manager")
     def reorder_page():
         database = get_db()
         selected_item = None
@@ -202,7 +240,7 @@ def create_app(test_config=None):
 
     # Queue one reorder using either the configured or a user-entered amount.
     @app.post("/reorders")
-    @login_required
+    @role_required("admin", "manager")
     def queue_reorder():
         try:
             product_id = int(request.form.get("product_id", ""))
@@ -281,7 +319,7 @@ def create_app(test_config=None):
 
     # Cancel a pending or ordered reorder from the queue.
     @app.post("/reorders/<int:reorder_id>/cancel")
-    @login_required
+    @role_required("admin", "manager")
     def cancel_reorder(reorder_id):
         database = get_db()
         order = database.execute(
@@ -313,7 +351,7 @@ def create_app(test_config=None):
 
     # Adjust stock from the inventory page.
     @app.post("/adjust-stock")
-    @login_required
+    @role_required("admin", "manager", "employee")
     def adjust_stock():
         try:
             # The dialog sends a signed amount: positive for adding and negative for removing.
@@ -373,7 +411,7 @@ def create_app(test_config=None):
 
     # Create a user with a one-time temporary password shown only after registration.
     @app.route("/sign-in", methods=["GET", "POST"])
-    @login_required
+    @role_required("admin")
     def sign_page():
         if request.method == "GET":
             return render_template("Sign_in.html", error=None, temporary_password=None)
@@ -403,10 +441,24 @@ def create_app(test_config=None):
         database = get_db()
         try:
             # New accounts must replace this temporary credential after login.
-            database.execute(
+            cursor = database.execute(
                 """INSERT INTO users (username, password_hash, must_change_password)
                 VALUES (?, ?, 1)""",
                 (username, generate_password_hash(temporary_password)),
+            )
+            # The first account in the system becomes admin; everyone else starts as viewer.
+            is_first_user = (
+                database.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
+            )
+            database.execute(
+                """INSERT INTO user_roles (user_id, role_id)
+                SELECT ?, role_id FROM roles WHERE role_name = ?""",
+                (cursor.lastrowid, "admin" if is_first_user else "viewer"),
+            )
+            assigned_role = "admin" if is_first_user else "viewer"
+            log_event(
+                "account_created",
+                f"Created account {username} with {assigned_role} role",
             )
             database.commit()
         except sqlite3.IntegrityError:
@@ -421,6 +473,75 @@ def create_app(test_config=None):
             error=None,
             temporary_password=temporary_password,
             username=username,
+        )
+
+    # Admin-only page listing users with a form to change each user's role.
+    @app.get("/users")
+    @role_required("admin")
+    def users_page():
+        users = query_db(
+            """SELECT users.user_id, users.username,
+                      COALESCE(roles.role_name, 'viewer') AS role_name
+            FROM users
+            LEFT JOIN user_roles ON user_roles.user_id = users.user_id
+            LEFT JOIN roles ON roles.role_id = user_roles.role_id
+            ORDER BY users.username COLLATE NOCASE"""
+        )
+        return render_template(
+            "users.html",
+            users=users,
+            roles=ROLE_NAMES,
+            message=request.args.get("message"),
+            error=request.args.get("error"),
+        )
+
+    @app.post("/users/<int:user_id>/role")
+    @role_required("admin")
+    def update_user_role(user_id):
+        new_role = request.form.get("role", "")
+        if new_role not in ROLE_NAMES:
+            return redirect(url_for("users_page", error="Invalid role."))
+
+        database = get_db()
+        target = database.execute(
+            "SELECT username FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if target is None:
+            return "User not found", 404
+
+        old = database.execute(
+            """SELECT roles.role_name FROM user_roles
+            JOIN roles ON roles.role_id = user_roles.role_id
+            WHERE user_roles.user_id = ?""",
+            (user_id,),
+        ).fetchone()
+        old_role = old["role_name"] if old else "viewer"
+
+        # Never leave the system without an administrator.
+        if old_role == "admin" and new_role != "admin":
+            admin_count = database.execute(
+                """SELECT COUNT(*) FROM user_roles
+                JOIN roles ON roles.role_id = user_roles.role_id
+                WHERE roles.role_name = 'admin'"""
+            ).fetchone()[0]
+            if admin_count <= 1:
+                return redirect(
+                    url_for("users_page", error="At least one administrator is required.")
+                )
+
+        database.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
+        database.execute(
+            """INSERT INTO user_roles (user_id, role_id)
+            SELECT ?, role_id FROM roles WHERE role_name = ?""",
+            (user_id, new_role),
+        )
+        log_event(
+            "role_changed",
+            f"Changed role for {target['username']} from {old_role} to {new_role}",
+        )
+        database.commit()
+        return redirect(
+            url_for("users_page", message=f"{target['username']} is now {new_role}.")
         )
 
     # Show the authenticator code prompt for a password-verified, pending login. - NL
@@ -519,7 +640,7 @@ def create_app(test_config=None):
 
     # Protect the add-item page and accept new inventory submissions.
     @app.route("/add-item", methods=["GET", "POST"])
-    @login_required
+    @role_required("admin", "manager")
     def add_item_page():
         if request.method == "POST":
             add_item(
@@ -537,7 +658,7 @@ def create_app(test_config=None):
 
     # Show active items that can be selected for removal.
     @app.get("/remove-item")
-    @login_required
+    @role_required("admin")
     def remove_item_page():
         items = query_db("""
             SELECT product_id, name
@@ -549,7 +670,7 @@ def create_app(test_config=None):
 
     # Delete the selected item and return to the current inventory list.
     @app.post("/remove-item")
-    @login_required
+    @role_required("admin")
     def remove_item_action():
         try:
             product_id = int(request.form.get("product_id", ""))
@@ -583,6 +704,7 @@ def create_app(test_config=None):
             "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE user_id = ?",
             (generate_password_hash(new_password), session["user_id"]),
         )
+        log_event("password_changed", "Changed account password")
         database.commit()
         session["must_change_password"] = False
         two_factor = database.execute(
@@ -622,6 +744,10 @@ def create_app(test_config=None):
                     secret_key = excluded.secret_key,
                     updated_at = CURRENT_TIMESTAMP""",
                 (session["user_id"], secret),
+            )
+            log_event(
+                "two_factor_setup_started",
+                "Started two-factor authentication setup",
             )
             database.commit()
 
@@ -683,6 +809,10 @@ def create_app(test_config=None):
                 for backup_code in backup_codes
             ],
         )
+        log_event(
+            "two_factor_enabled",
+            "Enabled two-factor authentication and generated backup codes",
+        )
         database.commit()
 
         return render_template(
@@ -718,6 +848,7 @@ def create_app(test_config=None):
         database.execute(
             "DELETE FROM user_backup_codes WHERE user_id = ?", (session["user_id"],)
         )
+        log_event("two_factor_disabled", "Disabled two-factor authentication")
         database.commit()
         return redirect(url_for("account_2fa_page"))
 

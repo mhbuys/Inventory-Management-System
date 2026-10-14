@@ -8,6 +8,7 @@
     <nav class="banner-actions" aria-label="Inventory sections">
         <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
         <a class="button button-primary" href="{{ url_for('stock_planning_page') }}" aria-current="page">Stock Planning</a>
+        {% if current_role == 'admin' %}<a class="button button-quiet" href="{{ url_for('users_page') }}">User permissions</a>{% endif %}
     </nav>
 </header>
 

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}User permissions | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Inventory actions">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
+        <a class="button button-quiet" href="{{ url_for('sign_page') }}">Create user</a>
+        <a class="button button-primary" href="{{ url_for('users_page') }}">User permissions</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page-shell">
+    <section class="inventory-panel" aria-labelledby="users-title">
+        <p class="eyebrow">User administration</p>
+        <h1 id="users-title">User permissions</h1>
+        {% if message %}<p role="status">{{ message }}</p>{% endif %}
+        {% if error %}<p class="status-low" role="alert">{{ error }}</p>{% endif %}
+        <div class="inventory-list">
+            {% for user in users %}
+            <form class="inventory-row" action="{{ url_for('update_user_role', user_id=user.user_id) }}" method="post">
+                <strong>{{ user.username }}</strong>
+                <div class="item-actions">
+                    <select name="role" aria-label="Role for {{ user.username }}">
+                        {% for role in roles %}
+                        <option value="{{ role }}" {% if role == user.role_name %}selected{% endif %}>{{ role|capitalize }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="button button-primary" type="submit">Save</button>
+                </div>
+            </form>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

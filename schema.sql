@@ -77,6 +77,9 @@ CREATE TABLE user_roles (
     FOREIGN KEY (role_id) REFERENCES roles (role_id) ON DELETE CASCADE
 );
 
+-- Default roles described in docs/user_roles_permissions.md.
+INSERT INTO roles (role_name) VALUES ('admin'), ('manager'), ('employee'), ('viewer');
+
 -- Record stock changes such as purchases, sales, adjustments, and reorder events.
 CREATE TABLE inventory_transactions (
     transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
