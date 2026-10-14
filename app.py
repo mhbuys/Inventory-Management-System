@@ -409,76 +409,9 @@ def create_app(test_config=None):
 
         return render_template("login.html", error="Invalid username or password"), 401
 
-    # Create a user with a one-time temporary password shown only after registration.
-    @app.route("/sign-in", methods=["GET", "POST"])
-    @role_required("admin")
-    def sign_page():
-        if request.method == "GET":
-            return render_template("Sign_in.html", error=None, temporary_password=None)
-
-        # Normalize the name before validation so accidental outer spaces do not
-        # create a second account that looks identical to the user.
-        username = request.form.get("username", "").strip()
-        if not username:
-            return render_template(
-                "Sign_in.html",
-                error="Enter a user name to create the account.",
-                temporary_password=None,
-            ), 400
-
-        if len(username) > 80:
-            return render_template(
-                "Sign_in.html",
-                error="User name must be 80 characters or fewer.",
-                temporary_password=None,
-            ), 400
-
-        # Keep the plaintext temporary password only long enough to display it
-        # once; the database receives a one-way hash instead.
-        temporary_password = secrets.token_urlsafe(TEMPORARY_PASSWORD_LENGTH)[
-            :TEMPORARY_PASSWORD_LENGTH
-        ]
-        database = get_db()
-        try:
-            # New accounts must replace this temporary credential after login.
-            cursor = database.execute(
-                """INSERT INTO users (username, password_hash, must_change_password)
-                VALUES (?, ?, 1)""",
-                (username, generate_password_hash(temporary_password)),
-            )
-            # The first account in the system becomes admin; everyone else starts as viewer.
-            is_first_user = (
-                database.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
-            )
-            database.execute(
-                """INSERT INTO user_roles (user_id, role_id)
-                SELECT ?, role_id FROM roles WHERE role_name = ?""",
-                (cursor.lastrowid, "admin" if is_first_user else "viewer"),
-            )
-            assigned_role = "admin" if is_first_user else "viewer"
-            log_event(
-                "account_created",
-                f"Created account {username} with {assigned_role} role",
-            )
-            database.commit()
-        except sqlite3.IntegrityError:
-            return render_template(
-                "Sign_in.html",
-                error="That user name is already in use.",
-                temporary_password=None,
-            ), 409
-
-        return render_template(
-            "Sign_in.html",
-            error=None,
-            temporary_password=temporary_password,
-            username=username,
-        )
-
-    # Admin-only page listing users with a form to change each user's role.
-    @app.get("/users")
-    @role_required("admin")
-    def users_page():
+    def render_users_page(
+        message=None, error=None, temporary_password=None, created_username=None
+    ):
         users = query_db(
             """SELECT users.user_id, users.username,
                       COALESCE(roles.role_name, 'viewer') AS role_name
@@ -491,8 +424,58 @@ def create_app(test_config=None):
             "users.html",
             users=users,
             roles=ROLE_NAMES,
-            message=request.args.get("message"),
-            error=request.args.get("error"),
+            message=message,
+            error=error,
+            temporary_password=temporary_password,
+            created_username=created_username,
+        )
+
+    # Admin-only user management: create accounts from the add-user dialog.
+    @app.route("/users", methods=["GET", "POST"])
+    @role_required("admin")
+    def users_page():
+        if request.method == "GET":
+            return render_users_page(
+                message=request.args.get("message"),
+                error=request.args.get("error"),
+            )
+
+        username = request.form.get("username", "").strip()
+        new_role = request.form.get("role", "")
+        if not username:
+            return render_users_page(error="Enter a user name to create the account."), 400
+        if len(username) > 80:
+            return render_users_page(error="User name must be 80 characters or fewer."), 400
+        if new_role not in ROLE_NAMES:
+            return render_users_page(error="Select a valid role for the account."), 400
+
+        temporary_password = secrets.token_urlsafe(TEMPORARY_PASSWORD_LENGTH)[
+            :TEMPORARY_PASSWORD_LENGTH
+        ]
+        database = get_db()
+        try:
+            cursor = database.execute(
+                """INSERT INTO users (username, password_hash, must_change_password)
+                VALUES (?, ?, 1)""",
+                (username, generate_password_hash(temporary_password)),
+            )
+            database.execute(
+                """INSERT INTO user_roles (user_id, role_id)
+                SELECT ?, role_id FROM roles WHERE role_name = ?""",
+                (cursor.lastrowid, new_role),
+            )
+            log_event(
+                "account_created",
+                f"Created account {username} with {new_role} role",
+            )
+            database.commit()
+        except sqlite3.IntegrityError:
+            database.rollback()
+            return render_users_page(error="That user name is already in use."), 409
+
+        return render_users_page(
+            temporary_password=temporary_password,
+            created_username=username,
         )
 
     @app.post("/users/<int:user_id>/role")
@@ -508,6 +491,11 @@ def create_app(test_config=None):
         ).fetchone()
         if target is None:
             return "User not found", 404
+
+        if user_id == session["user_id"] and new_role != "admin":
+            return redirect(
+                url_for("users_page", error="You cannot remove your own administrator role.")
+            )
 
         old = database.execute(
             """SELECT roles.role_name FROM user_roles
@@ -542,6 +530,45 @@ def create_app(test_config=None):
         database.commit()
         return redirect(
             url_for("users_page", message=f"{target['username']} is now {new_role}.")
+        )
+
+    @app.post("/users/<int:user_id>/delete")
+    @role_required("admin")
+    def delete_user(user_id):
+        if user_id == session["user_id"]:
+            return redirect(
+                url_for("users_page", error="You cannot delete your own account.")
+            )
+
+        database = get_db()
+        target = database.execute(
+            """SELECT users.username,
+                      COALESCE(roles.role_name, 'viewer') AS role_name
+            FROM users
+            LEFT JOIN user_roles ON user_roles.user_id = users.user_id
+            LEFT JOIN roles ON roles.role_id = user_roles.role_id
+            WHERE users.user_id = ?""",
+            (user_id,),
+        ).fetchone()
+        if target is None:
+            return "User not found", 404
+
+        if target["role_name"] == "admin":
+            admin_count = database.execute(
+                """SELECT COUNT(*) FROM user_roles
+                JOIN roles ON roles.role_id = user_roles.role_id
+                WHERE roles.role_name = 'admin'"""
+            ).fetchone()[0]
+            if admin_count <= 1:
+                return redirect(
+                    url_for("users_page", error="At least one administrator is required.")
+                )
+
+        log_event("account_deleted", f"Deleted account {target['username']}")
+        database.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+        database.commit()
+        return redirect(
+            url_for("users_page", message=f"{target['username']} was deleted.")
         )
 
     # Show the authenticator code prompt for a password-verified, pending login. - NL
@@ -617,7 +644,6 @@ def create_app(test_config=None):
         if request.endpoint in {
             "login",
             "login_page",
-            "sign_page",
             "logout",
             "verify_2fa_page",
             "verify_2fa",

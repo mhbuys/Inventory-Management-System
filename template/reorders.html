@@ -7,7 +7,7 @@
     <p class="brand">Inventory Management System</p>
     <nav class="banner-actions" aria-label="Reorder actions">
         <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
-        {% if current_role == 'admin' %}<a class="button button-quiet" href="{{ url_for('users_page') }}">User permissions</a>{% endif %}
+        {% if current_role == 'admin' %}<a class="button button-quiet" href="{{ url_for('users_page') }}">Manage users</a>{% endif %}
         <a class="button button-quiet" href="{{ url_for('account_2fa_page') }}">Security</a>
         <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
     </nav>

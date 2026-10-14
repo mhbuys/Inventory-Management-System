@@ -1,39 +1,185 @@
 {% extends "base.html" %}
 
-{% block title %}User permissions | Inventory Management System{% endblock %}
+{% block title %}Manage users | Inventory Management System{% endblock %}
 
 {% block content %}
+<style>
+    .user-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+    .user-dialog {
+        width: min(32rem, calc(100% - 2rem));
+        border: 0;
+        border-top: 4px solid var(--accent);
+        padding: 1.5rem;
+        color: var(--ink);
+        background: var(--surface);
+        box-shadow: 0 16px 40px rgba(36, 49, 59, .2);
+    }
+    .user-dialog::backdrop { background: rgba(36, 49, 59, .5); }
+    .user-dialog h2 { margin-bottom: 1rem; }
+    .user-dialog label {
+        display: block;
+        margin: .85rem 0 .35rem;
+        font-weight: 700;
+    }
+    .user-dialog input, .user-dialog select {
+        width: 100%;
+        border: 1px solid var(--line);
+        padding: .65rem;
+        color: var(--ink);
+        background: var(--surface);
+    }
+    .user-dialog .item-actions { justify-content: flex-end; margin-top: 1.25rem; }
+    .user-dialog .button-quiet { color: var(--ink); border-color: var(--line); }
+    .credentials {
+        margin: 1rem 0;
+        padding: 1rem;
+        border-left: 4px solid var(--accent);
+        background: #eef7f4;
+    }
+    .credentials strong {
+        display: block;
+        margin-top: .3rem;
+        font: 700 1.1rem Consolas, monospace;
+        overflow-wrap: anywhere;
+    }
+    @media (max-width: 760px) {
+        .user-actions { width: 100%; }
+        .user-actions .button { flex: 1; }
+    }
+</style>
+
 <header class="top-banner">
     <p class="brand">Inventory Management System</p>
-    <nav class="banner-actions" aria-label="Inventory actions">
+    <nav class="banner-actions" aria-label="User management">
         <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
-        <a class="button button-quiet" href="{{ url_for('sign_page') }}">Create user</a>
-        <a class="button button-primary" href="{{ url_for('users_page') }}">User permissions</a>
+        <a class="button button-primary" href="{{ url_for('users_page') }}" aria-current="page">Manage users</a>
         <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
     </nav>
 </header>
 
 <main class="page-shell">
     <section class="inventory-panel" aria-labelledby="users-title">
-        <p class="eyebrow">User administration</p>
-        <h1 id="users-title">User permissions</h1>
+        <div class="inventory-heading">
+            <div>
+                <p class="eyebrow">User administration</p>
+                <h1 id="users-title">Manage users</h1>
+                <p class="muted">Create accounts, update access roles, or remove users.</p>
+            </div>
+            <button class="button button-primary" id="open-add-user" type="button">Add user</button>
+        </div>
+
         {% if message %}<p role="status">{{ message }}</p>{% endif %}
         {% if error %}<p class="status-low" role="alert">{{ error }}</p>{% endif %}
+        {% if temporary_password %}
+        <div class="credentials" role="status">
+            <span>Temporary password. Save it now; it will not be shown again. Account: {{ created_username }}.</span>
+            <strong>{{ temporary_password }}</strong>
+            <span class="muted">The user must set a new password after signing in.</span>
+        </div>
+        {% endif %}
+
         <div class="inventory-list">
             {% for user in users %}
-            <form class="inventory-row" action="{{ url_for('update_user_role', user_id=user.user_id) }}" method="post">
-                <strong>{{ user.username }}</strong>
-                <div class="item-actions">
-                    <select name="role" aria-label="Role for {{ user.username }}">
-                        {% for role in roles %}
-                        <option value="{{ role }}" {% if role == user.role_name %}selected{% endif %}>{{ role|capitalize }}</option>
-                        {% endfor %}
-                    </select>
-                    <button class="button button-primary" type="submit">Save</button>
+            <article class="inventory-row">
+                <div>
+                    <strong>{{ user.username }}</strong>
+                    <span class="muted">Role: {{ user.role_name|capitalize }}</span>
                 </div>
-            </form>
+                <div class="user-actions">
+                    <button class="button button-quiet change-role-button" type="button"
+                            data-action="{{ url_for('update_user_role', user_id=user.user_id) }}"
+                            data-role="{{ user.role_name }}"
+                            data-username="{{ user.username }}">Change role</button>
+                    {% if user.user_id != session.get('user_id') %}
+                    <button class="button button-danger delete-user-button" type="button"
+                            data-action="{{ url_for('delete_user', user_id=user.user_id) }}"
+                            data-username="{{ user.username }}">Remove</button>
+                    {% endif %}
+                </div>
+            </article>
+            {% else %}
+            <p class="muted">No user accounts found.</p>
             {% endfor %}
         </div>
     </section>
 </main>
+
+<dialog class="user-dialog" id="add-user-dialog" aria-labelledby="add-user-title">
+    <form action="{{ url_for('users_page') }}" method="post">
+        <h2 id="add-user-title">Add user</h2>
+        <label for="new-username">User name</label>
+        <input id="new-username" name="username" type="text" maxlength="80"
+               autocomplete="off" required>
+        <label for="new-role">Access role</label>
+        <select id="new-role" name="role" required>
+            {% for role in roles %}
+            <option value="{{ role }}" {% if role == 'viewer' %}selected{% endif %}>{{ role|capitalize }}</option>
+            {% endfor %}
+        </select>
+        <div class="item-actions">
+            <button class="button button-quiet close-user-dialog" type="button">Cancel</button>
+            <button class="button button-primary" type="submit">Create account</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="user-dialog" id="role-dialog" aria-labelledby="role-dialog-title">
+    <form id="role-form" method="post">
+        <h2 id="role-dialog-title">Change user role</h2>
+        <p class="muted">Update access for <strong id="role-username"></strong>.</p>
+        <label for="updated-role">Access role</label>
+        <select id="updated-role" name="role" required>
+            {% for role in roles %}
+            <option value="{{ role }}">{{ role|capitalize }}</option>
+            {% endfor %}
+        </select>
+        <div class="item-actions">
+            <button class="button button-quiet close-user-dialog" type="button">Cancel</button>
+            <button class="button button-primary" type="submit">Save role</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="user-dialog" id="delete-dialog" aria-labelledby="delete-dialog-title">
+    <form id="delete-form" method="post">
+        <h2 id="delete-dialog-title">Remove user?</h2>
+        <p>Delete the account for <strong id="delete-username"></strong>? This cannot be undone.</p>
+        <div class="item-actions">
+            <button class="button button-quiet close-user-dialog" type="button">Cancel</button>
+            <button class="button button-danger" type="submit">Remove user</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+    const addUserDialog = document.getElementById("add-user-dialog");
+    const roleDialog = document.getElementById("role-dialog");
+    const deleteDialog = document.getElementById("delete-dialog");
+
+    document.getElementById("open-add-user").addEventListener("click", () => {
+        addUserDialog.showModal();
+        document.getElementById("new-username").focus();
+    });
+
+    document.querySelectorAll(".change-role-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            document.getElementById("role-form").action = button.dataset.action;
+            document.getElementById("role-username").textContent = button.dataset.username;
+            document.getElementById("updated-role").value = button.dataset.role;
+            roleDialog.showModal();
+        });
+    });
+
+    document.querySelectorAll(".delete-user-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            document.getElementById("delete-form").action = button.dataset.action;
+            document.getElementById("delete-username").textContent = button.dataset.username;
+            deleteDialog.showModal();
+        });
+    });
+
+    document.querySelectorAll(".close-user-dialog").forEach((button) => {
+        button.addEventListener("click", () => button.closest("dialog").close());
+    });
+</script>
 {% endblock %}

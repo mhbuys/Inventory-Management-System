@@ -253,7 +253,6 @@ def test_page_permissions_match_user_roles(tmp_path):
         "/stock-planning": {"admin", "manager"},
         "/shipping-control": {"admin", "manager"},
         "/reorders": {"admin", "manager"},
-        "/sign-in": {"admin"},
         "/users": {"admin"},
     }
 
@@ -296,7 +295,6 @@ def test_page_permissions_match_user_roles(tmp_path):
             role in {"admin", "manager"}
         )
         assert ('href="/remove-item"' in inventory_page) == (role == "admin")
-        assert ('href="/sign-in"' in inventory_page) == (role == "admin")
         assert ('href="/users"' in inventory_page) == (role == "admin")
 
 
@@ -312,7 +310,9 @@ def test_user_creation_assigns_temporary_password(tmp_path):
     # User creation is a internal admin function.
     admin_client = app.test_client()
     login_as_admin(admin_client)
-    response = admin_client.post("/sign-in", data={"username": "new-user"})
+    response = admin_client.post(
+        "/users", data={"username": "new-user", "role": "viewer"}
+    )
     page = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -391,11 +391,77 @@ def test_user_creation_rejects_duplicate_name(tmp_path):
     # account or expose a second temporary password.
     admin_client = app.test_client()
     login_as_admin(admin_client)
-    admin_client.post("/sign-in", data={"username": "new-user"})
-    response = admin_client.post("/sign-in", data={"username": "new-user"})
+    admin_client.post(
+        "/users", data={"username": "new-user", "role": "viewer"}
+    )
+    response = admin_client.post(
+        "/users", data={"username": "new-user", "role": "viewer"}
+    )
 
     assert response.status_code == 409
     assert b"already in use" in response.data
+
+
+def test_manage_users_can_delete_accounts_and_logs_removal(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    admin_client = app.test_client()
+    login_as_admin(admin_client)
+    create_response = admin_client.post(
+        "/users", data={"username": "remove-me", "role": "employee"}
+    )
+    assert create_response.status_code == 200
+    assert "Manage users" in create_response.get_data(as_text=True)
+
+    with app.app_context():
+        target = get_db().execute(
+            """SELECT users.user_id, roles.role_name
+            FROM users
+            JOIN user_roles ON user_roles.user_id = users.user_id
+            JOIN roles ON roles.role_id = user_roles.role_id
+            WHERE users.username = ?""",
+            ("remove-me",),
+        ).fetchone()
+        admin_user_id = get_db().execute(
+            "SELECT user_id FROM users WHERE username = 'admin'"
+        ).fetchone()["user_id"]
+    assert target["role_name"] == "employee"
+
+    self_delete_response = admin_client.post(
+        f"/users/{admin_user_id}/delete", follow_redirects=True
+    )
+    assert b"You cannot delete your own account." in self_delete_response.data
+    self_role_response = admin_client.post(
+        f"/users/{admin_user_id}/role",
+        data={"role": "viewer"},
+        follow_redirects=True,
+    )
+    assert b"You cannot remove your own administrator role." in self_role_response.data
+
+    delete_response = admin_client.post(
+        f"/users/{target['user_id']}/delete", follow_redirects=False
+    )
+    assert delete_response.status_code == 302
+    with app.app_context():
+        deleted_user = get_db().execute(
+            "SELECT 1 FROM users WHERE user_id = ?", (target["user_id"],)
+        ).fetchone()
+        deletion_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'account_deleted'
+              AND description = 'Deleted account remove-me'"""
+        ).fetchone()
+    assert deleted_user is None
+    assert tuple(deletion_event) == (
+        "account_deleted",
+        "Deleted account remove-me",
+    )
 
 
 def test_user_creation_requires_login(tmp_path):
@@ -408,13 +474,13 @@ def test_user_creation_requires_login(tmp_path):
         init_db()
 
     client = app.test_client()
-    response = client.get("/sign-in", follow_redirects=False)
+    response = client.get("/users", follow_redirects=False)
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/login"
 
 
-def test_inventory_top_bar_links_to_user_creation(tmp_path):
+def test_inventory_top_bar_links_to_user_management(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -427,8 +493,8 @@ def test_inventory_top_bar_links_to_user_creation(tmp_path):
     login_as_admin(client)
     page = client.get("/").get_data(as_text=True)
 
-    assert 'href="/sign-in"' in page
-    assert "Create user" in page
+    assert 'href="/users"' in page
+    assert "Manage users" in page
 
 
 # This verifies the seeded admin login succeeds for the browser and protected routes.
