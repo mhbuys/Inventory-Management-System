@@ -627,9 +627,7 @@ def test_inventory_page_adjusts_stock_by_requested_amount(tmp_path):
         )
 
 
-def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order(
-    tmp_path,
-):
+def test_inventory_low_stock_alert_opens_reorder_form_and_queues_order(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -654,14 +652,14 @@ def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order
     assert f"/reorders?product_id={product_id}".encode() in inventory_page.data
     assert page.status_code == 200
     assert b"Catan" in page.data
-    assert b"Use automatic reorder amount" in page.data
+    assert b"Custom order quantity" in page.data
+    assert b'value="10"' in page.data
 
     response = client.post(
         "/reorders",
         data={
             "product_id": product_id,
-            "automatic_amount": "1",
-            "automatic_reorder_amount": "10",
+            "quantity_ordered": "10",
         },
     )
 
