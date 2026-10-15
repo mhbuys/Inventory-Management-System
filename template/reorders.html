@@ -40,17 +40,6 @@
             <label for="quantity-ordered">Custom order quantity</label>
             <input id="quantity-ordered" name="quantity_ordered" type="number"
                    min="1" step="1" value="{{ selected_item['reorder_amount'] or 1 }}" required>
-            <label for="automatic-amount">
-                <input id="automatic-amount" type="checkbox" name="automatic_amount" value="1">
-                Use automatic reorder amount
-            </label>
-            <div id="automatic-amount-fields" hidden>
-                <label for="automatic-reorder-amount">Automatic reorder amount</label>
-                <input id="automatic-reorder-amount" name="automatic_reorder_amount"
-                       type="number" min="1" step="1"
-                       value="{{ selected_item['reorder_amount'] or 1 }}">
-                <p class="muted">This amount will be saved for future automatic reorders of this item.</p>
-            </div>
             <div class="item-actions">
                 <button class="button button-primary" type="submit">Queue order</button>
                 <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Back to queued orders</a>
