@@ -72,25 +72,24 @@ This document describes the current item-management functions and where readers 
   low-stock alert. Selecting the alert opens the reorder workflow for that product.
 - **Access:** Requires an authenticated user.
 
-## `sign_page`
+## `users_page`
 
-- **Location:** `app.py` (`sign_page`)
-- **Date added:** 2026-10-10
-- **Purpose:** Displays the user-account creation form and creates a new account from
-  the submitted user name.
-- **Methods:** Accepts `GET` to display the form and `POST` to create the account.
-- **Parameters:**
+- **Location:** `app.py` (`users_page`)
+- **Purpose:** Lists user accounts and lets administrators create accounts, assign
+  roles, and remove accounts from one management page.
+- **Methods:** Accepts `GET` to display the account list and `POST` to create an account.
+- **Parameters for account creation:**
   - `username`: Required user name, trimmed of surrounding spaces and limited to 80
     characters.
+  - `role`: Required role selected from the supported roles.
 - **Temporary password:** Generates a random 12-character temporary password after
   validating the user name. The password is displayed once on the successful response
   and is not stored in plaintext.
-- **Database behavior:** Stores the user name and a Werkzeug password hash in the
-  `users` table. New accounts are created with `must_change_password = 1`, requiring
-  the user to choose a permanent password after the first successful login.
-- **Errors:** Returns a client error for a missing or overlong user name and a conflict
-  response when the user name already exists.
-- **Access:** Available without authentication so a new user can reach the form.
+- **Database behavior:** Stores a password hash, assigns the requested role, and logs
+  account creation. New accounts have `must_change_password = 1`.
+- **Access:** Administrator only. Role updates and account deletion are handled by
+  separate administrator-only POST routes; the last administrator and the signed-in
+  administrator cannot be removed.
 
 ## `login`
 
@@ -156,7 +155,7 @@ This document describes the current item-management functions and where readers 
 
 1. Open `items.py` in the project root.
 2. Open `app.py` to locate the inventory and reorder route functions.
-3. Open `template/Sign_in.html` to locate the user-account creation form.
+3. Open `template/users.html` to locate the user-management page and account dialogs.
 4. Open `template/reorders.html` to locate the automatic quantity synchronization.
 5. Use your code editor's search feature to locate a function by name (e.g.,
-   `add_item`, `sign_page`, `reorder_page`, or `cancel_reorder`).
+   `add_item`, `users_page`, `reorder_page`, or `cancel_reorder`).

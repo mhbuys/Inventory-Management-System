@@ -72,8 +72,18 @@ def init_db():
         database.executescript(schema_file.read().decode("utf-8"))
 
     # Seed the default admin account and force a password change on first login. - NL
-    database.execute(
+    # The first account created is always the administrator.
+    admin_insert = database.execute(
         "INSERT OR IGNORE INTO users (username, password_hash, must_change_password) VALUES (?, ?, 1)",
         ("admin", generate_password_hash("admin")),
     )
+    admin_role = database.execute(
+        """INSERT OR IGNORE INTO user_roles (user_id, role_id)
+        SELECT users.user_id, roles.role_id FROM users, roles
+        WHERE users.username = 'admin' AND roles.role_name = 'admin'"""
+    )
+    if admin_insert.rowcount:
+        log_event("account_created", "Created initial admin account")
+    if admin_role.rowcount:
+        log_event("role_changed", "Assigned admin role to initial admin account")
     database.commit()

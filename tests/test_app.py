@@ -14,6 +14,29 @@ def login_as_admin(client):
     )
 
 
+def client_as_role(app, role):
+    with app.app_context():
+        database = get_db()
+        cursor = database.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            (f"{role}-test-user", "unused"),
+        )
+        user_id = cursor.lastrowid
+        database.execute(
+            """INSERT INTO user_roles (user_id, role_id)
+            SELECT ?, role_id FROM roles WHERE role_name = ?""",
+            (user_id, role),
+        )
+        database.commit()
+
+    client = app.test_client()
+    with client.session_transaction() as user_session:
+        user_session["user_id"] = user_id
+        user_session["username"] = f"{role}-test-user"
+        user_session["must_change_password"] = False
+    return client
+
+
 # Verify that the app can build the SQLite schema into a temporary database file.
 def test_app_initializes_database(tmp_path):
     database_path = tmp_path / "inventory.db"
@@ -209,6 +232,72 @@ def test_login_page_is_reachable_without_authentication(tmp_path):
     assert b"Please log in" in response.data
 
 
+def test_page_permissions_match_user_roles(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=1,
+            low_stock_threshold=2,
+        )
+
+    restricted_pages = {
+        "/add-item": {"admin", "manager"},
+        "/remove-item": {"admin"},
+        "/stock-planning": {"admin", "manager"},
+        "/shipping-control": {"admin", "manager"},
+        "/reorders": {"admin", "manager"},
+        "/users": {"admin"},
+    }
+
+    for role in ("admin", "manager", "employee", "viewer"):
+        client = client_as_role(app, role)
+        with app.app_context():
+            database = get_db()
+            database.execute(
+                "UPDATE inventory SET quantity = 1 WHERE product_id = ?",
+                (product_id,),
+            )
+            database.commit()
+
+        assert client.get("/").status_code == 200
+        assert client.get("/account/2fa").status_code == 200
+        for path, allowed_roles in restricted_pages.items():
+            expected_status = 200 if role in allowed_roles else 403
+            assert client.get(path).status_code == expected_status
+
+        stock_response = client.post(
+            "/adjust-stock",
+            data={"product_id": str(product_id), "quantity_change": "1"},
+        )
+        assert stock_response.status_code == (302 if role != "viewer" else 403)
+        with app.app_context():
+            quantity = get_db().execute(
+                "SELECT quantity FROM inventory WHERE product_id = ?",
+                (product_id,),
+            ).fetchone()[0]
+        assert quantity == (2 if role != "viewer" else 1)
+
+        inventory_page = client.get("/").get_data(as_text=True)
+        assert 'href="/account/2fa"' in inventory_page
+        assert f"LOW STOCK: {quantity} units" in inventory_page
+        assert ('href="/reorders?product_id=' in inventory_page) == (
+            role in {"admin", "manager"}
+        )
+        assert ('action="/adjust-stock"' in inventory_page) == (role != "viewer")
+        assert ('href="/add-item"' in inventory_page) == (
+            role in {"admin", "manager"}
+        )
+        assert ('href="/remove-item"' in inventory_page) == (role == "admin")
+        assert ('href="/users"' in inventory_page) == (role == "admin")
+
+
 def test_user_creation_assigns_temporary_password(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
@@ -221,7 +310,9 @@ def test_user_creation_assigns_temporary_password(tmp_path):
     # User creation is a internal admin function.
     admin_client = app.test_client()
     login_as_admin(admin_client)
-    response = admin_client.post("/sign-in", data={"username": "new-user"})
+    response = admin_client.post(
+        "/users", data={"username": "new-user", "role": "viewer"}
+    )
     page = response.get_data(as_text=True)
 
     assert response.status_code == 200
@@ -237,13 +328,40 @@ def test_user_creation_assigns_temporary_password(tmp_path):
         user = (
             get_db()
             .execute(
-                "SELECT password_hash, must_change_password FROM users WHERE username = ?",
+                """SELECT user_id, password_hash, must_change_password
+                FROM users WHERE username = ?""",
                 ("new-user",),
             )
             .fetchone()
         )
     assert user["password_hash"] != temporary_password
     assert user["must_change_password"] == 1
+
+    with app.app_context():
+        creation_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'account_created'
+              AND description LIKE '%new-user%'"""
+        ).fetchone()
+    assert tuple(creation_event) == (
+        "account_created",
+        "Created account new-user with viewer role",
+    )
+
+    role_response = admin_client.post(
+        f"/users/{user['user_id']}/role", data={"role": "manager"}
+    )
+    assert role_response.status_code == 302
+    with app.app_context():
+        role_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'role_changed'
+              AND description LIKE '%new-user%'"""
+        ).fetchone()
+    assert tuple(role_event) == (
+        "role_changed",
+        "Changed role for new-user from viewer to manager",
+    )
 
     user_client = app.test_client()
     login_response = user_client.post(
@@ -273,11 +391,77 @@ def test_user_creation_rejects_duplicate_name(tmp_path):
     # account or expose a second temporary password.
     admin_client = app.test_client()
     login_as_admin(admin_client)
-    admin_client.post("/sign-in", data={"username": "new-user"})
-    response = admin_client.post("/sign-in", data={"username": "new-user"})
+    admin_client.post(
+        "/users", data={"username": "new-user", "role": "viewer"}
+    )
+    response = admin_client.post(
+        "/users", data={"username": "new-user", "role": "viewer"}
+    )
 
     assert response.status_code == 409
     assert b"already in use" in response.data
+
+
+def test_manage_users_can_delete_accounts_and_logs_removal(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    admin_client = app.test_client()
+    login_as_admin(admin_client)
+    create_response = admin_client.post(
+        "/users", data={"username": "remove-me", "role": "employee"}
+    )
+    assert create_response.status_code == 200
+    assert "Manage users" in create_response.get_data(as_text=True)
+
+    with app.app_context():
+        target = get_db().execute(
+            """SELECT users.user_id, roles.role_name
+            FROM users
+            JOIN user_roles ON user_roles.user_id = users.user_id
+            JOIN roles ON roles.role_id = user_roles.role_id
+            WHERE users.username = ?""",
+            ("remove-me",),
+        ).fetchone()
+        admin_user_id = get_db().execute(
+            "SELECT user_id FROM users WHERE username = 'admin'"
+        ).fetchone()["user_id"]
+    assert target["role_name"] == "employee"
+
+    self_delete_response = admin_client.post(
+        f"/users/{admin_user_id}/delete", follow_redirects=True
+    )
+    assert b"You cannot delete your own account." in self_delete_response.data
+    self_role_response = admin_client.post(
+        f"/users/{admin_user_id}/role",
+        data={"role": "viewer"},
+        follow_redirects=True,
+    )
+    assert b"You cannot remove your own administrator role." in self_role_response.data
+
+    delete_response = admin_client.post(
+        f"/users/{target['user_id']}/delete", follow_redirects=False
+    )
+    assert delete_response.status_code == 302
+    with app.app_context():
+        deleted_user = get_db().execute(
+            "SELECT 1 FROM users WHERE user_id = ?", (target["user_id"],)
+        ).fetchone()
+        deletion_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'account_deleted'
+              AND description = 'Deleted account remove-me'"""
+        ).fetchone()
+    assert deleted_user is None
+    assert tuple(deletion_event) == (
+        "account_deleted",
+        "Deleted account remove-me",
+    )
 
 
 def test_user_creation_requires_login(tmp_path):
@@ -290,13 +474,13 @@ def test_user_creation_requires_login(tmp_path):
         init_db()
 
     client = app.test_client()
-    response = client.get("/sign-in", follow_redirects=False)
+    response = client.get("/users", follow_redirects=False)
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/login"
 
 
-def test_inventory_top_bar_links_to_user_creation(tmp_path):
+def test_inventory_top_bar_links_to_user_management(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -309,8 +493,8 @@ def test_inventory_top_bar_links_to_user_creation(tmp_path):
     login_as_admin(client)
     page = client.get("/").get_data(as_text=True)
 
-    assert 'href="/sign-in"' in page
-    assert "Create user" in page
+    assert 'href="/users"' in page
+    assert "Manage users" in page
 
 
 # This verifies the seeded admin login succeeds for the browser and protected routes.
@@ -443,9 +627,7 @@ def test_inventory_page_adjusts_stock_by_requested_amount(tmp_path):
         )
 
 
-def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order(
-    tmp_path,
-):
+def test_inventory_low_stock_alert_opens_reorder_form_and_queues_order(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -470,14 +652,14 @@ def test_inventory_low_stock_alert_opens_reorder_form_and_queues_automatic_order
     assert f"/reorders?product_id={product_id}".encode() in inventory_page.data
     assert page.status_code == 200
     assert b"Catan" in page.data
-    assert b"Use automatic reorder amount" in page.data
+    assert b"Custom order quantity" in page.data
+    assert b'value="10"' in page.data
 
     response = client.post(
         "/reorders",
         data={
             "product_id": product_id,
-            "automatic_amount": "1",
-            "automatic_reorder_amount": "10",
+            "quantity_ordered": "10",
         },
     )
 
@@ -877,6 +1059,20 @@ def test_two_factor_enrollment_and_totp_login(tmp_path):
     assert settings["updated_at"]
     assert backup_code_count > 0
 
+    with app.app_context():
+        security_events = get_db().execute(
+            """SELECT event_type FROM event_logs
+            WHERE user_id = (SELECT user_id FROM users WHERE username = 'admin')
+              AND event_type IN (
+                  'two_factor_setup_started', 'two_factor_enabled'
+              )
+            ORDER BY log_id"""
+        ).fetchall()
+    assert [event["event_type"] for event in security_events] == [
+        "two_factor_setup_started",
+        "two_factor_enabled",
+    ]
+
     client.get("/logout")
     login_response = client.post(
         "/login", data={"username": "admin", "password": "new-password123"}
@@ -900,6 +1096,21 @@ def test_two_factor_enrollment_and_totp_login(tmp_path):
     )
     assert verify_response.headers["Location"] == "/"
     assert client.get("/").status_code == 200
+
+    disable_response = client.post(
+        "/account/2fa/disable", data={"password": "new-password123"}
+    )
+    assert disable_response.headers["Location"] == "/account/2fa"
+    with app.app_context():
+        disable_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'two_factor_disabled'
+            ORDER BY log_id DESC LIMIT 1"""
+        ).fetchone()
+    assert tuple(disable_event) == (
+        "two_factor_disabled",
+        "Disabled two-factor authentication",
+    )
 
 
 # Verify users without enabled 2FA are sent to setup after password login. - NL
@@ -926,6 +1137,16 @@ def test_login_redirects_to_two_factor_setup_when_not_enabled(tmp_path):
     )
     assert password_response.headers["Location"] == "/account/2fa"
     assert client.get("/account/2fa").status_code == 200
+    with app.app_context():
+        password_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'password_changed'
+            ORDER BY log_id DESC LIMIT 1"""
+        ).fetchone()
+    assert tuple(password_event) == (
+        "password_changed",
+        "Changed account password",
+    )
 
     client.get("/logout")
     subsequent_login = client.post(

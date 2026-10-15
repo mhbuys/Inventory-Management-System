@@ -5,3 +5,4 @@ __pycache__/
 instance/*.db
 .env
 .vscode/settings.json
+docs/Logs/event_log.txt

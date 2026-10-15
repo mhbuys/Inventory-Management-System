@@ -1,206 +1,63 @@
-<!DOCTYPE html>
-
-<html lang="en">
-
-
-
-<head>
-
-    <meta charset="UTF-8">
-
-    <title>Add Item</title>
-
-
-
-    <style>
-
-        body {
-
-            margin: 0;
-
-            background: #f7faf9;
-
-            font-family: Georgia, "Times New Roman", serif;
-
-        }
-
-
-
-        header {
-
-            background: #174d4a;
-
-            color: white;
-
-            padding: 1rem 2rem;
-
-        }
-
-
-
-        main {
-
-            width: 600px;
-
-            max-width: 90%;
-
-            margin: 3rem auto;
-
-            background: white;
-
-            padding: 2rem;
-
-        }
-
-
-
-        label {
-
-            font-weight: bold;
-
-        }
-
-
-
-        input {
-
-            width: 100%;
-
-            padding: 8px;
-
-            margin-top: 5px;
-
-            box-sizing: border-box;
-
-        }
-
-
-
-        button {
-
-            padding: 10px 15px;
-
-            background: #216e68;
-
-            color: white;
-
-            border: none;
-
-        }
-
-
-
-        a {
-
-            margin-left: 10px;
-
-        }
-
-    </style>
-
-</head>
-
-
-
-<body>
-
-
-
-<h
-
-
-
-<header>
-
-    <h2>Inventory Management System</h2>
-
+{% extends "base.html" %}
+
+{% block title %}Add Item | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <nav class="banner-actions" aria-label="Inventory actions">
+        {% if current_role in ('admin', 'manager') %}
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
+        {% endif %}
+        {% if current_role == 'admin' %}
+        <a class="button button-danger" href="{{ url_for('remove_item_page') }}">Remove item</a>
+        {% endif %}
+        {% if current_role in ('admin', 'manager') %}
+        <a class="button button-quiet" href="{{ url_for('stock_planning_page') }}">Stock Planning</a>
+        <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Reorder queue</a>
+        {% endif %}
+        {% if current_role == 'admin' %}
+        <a class="button button-quiet" href="{{ url_for('users_page') }}">Manage users</a>
+        {% endif %}
+        <a class="button button-quiet" href="{{ url_for('account_2fa_page') }}">Security</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
 </header>
 
+<main class="page-shell">
+    <section class="inventory-panel" aria-labelledby="add-item-title">
+        <p class="eyebrow">Inventory</p>
+        <h1 id="add-item-title">Add Item</h1>
 
+        <form class="stock-planning-form" method="post">
+            <label for="item-name">Item Name</label>
+            <input id="item-name" type="text" name="name">
 
-<main>
-
-    <h1>Add Item</h1>
-
-
-
-    <form method="post">
-
-
-
-        <p>
-
-            <label>Item Name</label><br>
-
-            <input type="text" name="name">
-
-        </p>
-
-
-
-        <p>
-
-            <label>Category</label><br>
-
-            <select name="category" required>
+            <label for="item-category">Category</label>
+            <select id="item-category" name="category" required>
                 <option value="board_game">Board Game</option>
                 <option value="card_game">Card Game</option>
                 <option value="dice">Dice</option>
                 <option value="miniature">Miniature</option>
             </select>
 
-        </p>
+            <label for="item-description">Description</label>
+            <input id="item-description" type="text" name="description">
 
+            <label for="item-price">Price</label>
+            <input id="item-price" type="number" name="price" step="0.01">
 
+            <label for="item-quantity">Quantity</label>
+            <input id="item-quantity" type="number" name="quantity" min="0" required>
 
-        <p>
+            <label for="low-stock-threshold">Low-stock threshold</label>
+            <input id="low-stock-threshold" type="number" name="low_stock_threshold" min="0" value="0" required>
 
-            <label>Description</label><br>
-
-            <input type="text" name="description">
-
-        </p>
-
-
-
-        <p>
-
-            <label>Price</label><br>
-
-            <input type="number" name="price" step="0.01">
-
-        </p>
-
-
-
-        <p>
-
-            <label>Quantity</label><br>
-
-            <input type="number" name="quantity" min="0" required>
-
-        </p>
-
-        <p>
-
-            <label>Low-stock threshold</label><br>
-
-            <input type="number" name="low_stock_threshold" min="0" value="0" required>
-
-        </p>
-
-        <button type="submit">Add Item</button>
-
-        <a href="/">Cancel</a>
-
-
-
-    </form>
-
+            <div class="item-actions">
+                <button class="button button-primary" type="submit">Add Item</button>
+                <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Cancel</a>
+            </div>
+        </form>
+    </section>
 </main>
-
-
-
-</body>
-
-</html>
+{% endblock %}
