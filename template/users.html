@@ -58,7 +58,7 @@
         <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Reorder queue</a>
         {% endif %}
         {% if current_role == 'admin' %}
-        <a class="button button-quiet" href="{{ url_for('users_page') }}">Manage users</a>
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
         {% endif %}
         <a class="button button-quiet" href="{{ url_for('account_2fa_page') }}">Security</a> <!-- Link to the 2FA setup page - NL -->
         <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
