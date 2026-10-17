@@ -7,6 +7,7 @@
     <p class="brand">Inventory Management System</p>
     <nav class="banner-actions" aria-label="Account actions">
         <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Back to inventory</a>
+        {% if current_role == 'admin' %}<a class="button button-quiet" href="{{ url_for('users_page') }}">Manage users</a>{% endif %}
         <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
     </nav>
 </header>

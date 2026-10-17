@@ -91,6 +91,34 @@ This document describes the current item-management functions and where readers 
   quantity in place of the low-stock reorder link.
 - **Access:** Requires an authenticated user.
 
+## `users_page`
+
+- **Location:** `app.py` (`users_page`)
+- **Purpose:** Lists user accounts and lets administrators create accounts, assign
+  roles, and remove accounts from one management page.
+- **Methods:** Accepts `GET` to display the account list and `POST` to create an account.
+- **Parameters for account creation:**
+  - `username`: Required user name, trimmed of surrounding spaces and limited to 80
+    characters.
+  - `role`: Required role selected from the supported roles.
+- **Temporary password:** Generates a random 12-character temporary password after
+  validating the user name. The password is displayed once on the successful response
+  and is not stored in plaintext.
+- **Database behavior:** Stores a password hash, assigns the requested role, and logs
+  account creation. New accounts have `must_change_password = 1`.
+- **Access:** Administrator only. Role updates and account deletion are handled by
+  separate administrator-only POST routes; the last administrator and the signed-in
+  administrator cannot be removed.
+
+## `login`
+
+- **Location:** `app.py` (`login`)
+- **Purpose:** Authenticates an existing user with a user name and password.
+- **Temporary-account behavior:** A valid temporary password starts a session with the
+  required-password-change flag. The existing `change_password` route then prevents
+  access to inventory pages until the temporary password is replaced.
+- **Access:** Available without authentication.
+
 ## `reorder_page`
 
 - **Location:** `app.py` (`reorder_page`)
@@ -146,6 +174,7 @@ This document describes the current item-management functions and where readers 
 
 1. Open `items.py` in the project root.
 2. Open `app.py` to locate the inventory and reorder route functions.
-3. Open `template/reorders.html` to locate the automatic quantity synchronization.
-4. Use your code editor's search feature to locate a function by name (e.g.,
-   `add_item`, `reorder_page`, or `cancel_reorder`).
+3. Open `template/users.html` to locate the user-management page and account dialogs.
+4. Open `template/reorders.html` to locate the automatic quantity synchronization.
+5. Use your code editor's search feature to locate a function by name (e.g.,
+   `add_item`, `users_page`, `reorder_page`, or `cancel_reorder`).

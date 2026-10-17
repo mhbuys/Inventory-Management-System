@@ -5,9 +5,22 @@
 {% block content %}
 <header class="top-banner">
     <p class="brand">Inventory Management System</p>
-    <nav class="banner-actions" aria-label="Inventory sections">
+    <nav class="banner-actions" aria-label="Inventory actions">
+        {% if current_role in ('admin', 'manager') %}
+        <a class="button button-primary" href="{{ url_for('add_item_page') }}">Add item</a>
+        {% endif %}
+        {% if current_role == 'admin' %}
+        <a class="button button-danger" href="{{ url_for('remove_item_page') }}">Remove item</a>
+        {% endif %}
+        {% if current_role in ('admin', 'manager') %}
         <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
-        <a class="button button-primary" href="{{ url_for('stock_planning_page') }}" aria-current="page">Stock Planning</a>
+        <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Reorder queue</a>
+        {% endif %}
+        {% if current_role == 'admin' %}
+        <a class="button button-quiet" href="{{ url_for('users_page') }}">Manage users</a>
+        {% endif %}
+        <a class="button button-quiet" href="{{ url_for('account_2fa_page') }}">Security</a> <!-- Link to the 2FA setup page - NL -->
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
     </nav>
 </header>
 

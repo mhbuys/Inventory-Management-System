@@ -6,10 +6,19 @@
 <header class="top-banner">
     <p class="brand">Inventory Management System</p>
     <nav class="banner-actions" aria-label="Inventory actions">
+        {% if current_role in ('admin', 'manager') %}
         <a class="button button-primary" href="{{ url_for('add_item_page') }}">Add item</a>
+        {% endif %}
+        {% if current_role == 'admin' %}
         <a class="button button-danger" href="{{ url_for('remove_item_page') }}">Remove item</a>
+        {% endif %}
+        {% if current_role in ('admin', 'manager') %}
         <a class="button button-quiet" href="{{ url_for('stock_planning_page') }}">Stock Planning</a>
         <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Reorder queue</a>
+        {% endif %}
+        {% if current_role == 'admin' %}
+        <a class="button button-quiet" href="{{ url_for('users_page') }}">Manage users</a>
+        {% endif %}
         <a class="button button-quiet" href="{{ url_for('account_2fa_page') }}">Security</a> <!-- Link to the 2FA setup page - NL -->
         <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
     </nav>
@@ -42,15 +51,20 @@
                     LOW STOCK: {{ item["quantity"] }} units — ORDER PENDING: {{ item["pending_order_quantity"] }} units
                 </span>
                 {% elif item["quantity"] <= item["low_stock_threshold"] %}
+                    {% if current_role in ('admin', 'manager') %}
                 <a class="status status-low" href="{{ url_for('reorder_page', product_id=item['product_id']) }}">
                     LOW STOCK: {{ item["quantity"] }} units — reorder
                 </a>
+                {% else %}
+                <span class="status status-low">LOW STOCK: {{ item["quantity"] }} units</span>
+                {% endif %}
                 {% else %}
                 <span class="status">
                     {{ item["quantity"] }} units available
                 </span>
                 {% endif %}
 
+                {% if current_role in ('admin', 'manager', 'employee') %}
                 <div class="item-actions" aria-label="Adjust {{ item['name'] }} stock">
                     <form method="post" action="{{ url_for('adjust_stock') }}" data-item-name="{{ item['name'] }}" data-action="add" onsubmit="return openQuantityDialog(this);">
                         <input type="hidden" name="product_id" value="{{ item['product_id'] }}">
@@ -64,6 +78,7 @@
                         <button class="button button-danger" type="submit" aria-label="Remove units from {{ item['name'] }}" title="Remove units"{% if item["quantity"] == 0 %} disabled{% endif %}>-</button>
                     </form>
                 </div>
+                {% endif %}
             </article>
             {% else %}
             <p class="muted">No active inventory items found.</p>
