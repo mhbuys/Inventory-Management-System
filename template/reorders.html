@@ -59,7 +59,11 @@
                 <h2 id="queued-orders-title">Queued orders</h2>
                 <p class="muted">Orders waiting to be placed or received. Low-stock alerts remain on Inventory.</p>
             </div>
-            <span class="status">{{ queued_orders|length }} active orders</span>
+            <div class="item-actions">
+                <!-- Manual orders can be placed for any active inventory item. -->
+                <a class="button button-primary" href="{{ url_for('reorder_page', manual=1) }}">Add order</a>
+                <span class="status">{{ queued_orders|length }} active orders</span>
+            </div>
         </div>
 
         <div class="inventory-list">
@@ -84,38 +88,42 @@
             {% endfor %}
         </div>
     </section>
+{% if manual_order %}
+<!-- Keep manual ordering separate from the low-stock reorder form above. -->
+<section class="inventory-panel" aria-labelledby="manual-order-title">
+    <div class="inventory-heading">
+        <div>
+            <p class="eyebrow">Manual ordering</p>
+            <h2 id="manual-order-title">Order an item</h2>
+            <p class="muted">Choose any active inventory item and the quantity to add to the queue.</p>
+        </div>
+    </div>
+
+    {% if manual_items %}
+    <form method="post" action="{{ url_for('queue_reorder') }}" id="manual-reorder-form">
+        <!-- The selected item and quantity are validated again by the server. -->
+        <label for="manual-product-id">Inventory item</label>
+        <select id="manual-product-id" name="product_id" required>
+            <option value="">Select an item</option>
+            {% for item in manual_items %}
+            <option value="{{ item['product_id'] }}"
+                {% if selected_item and selected_item['product_id'] == item['product_id'] %}selected{% endif %}>
+                {{ item['name'] }} ({{ item['quantity'] }} in stock)
+            </option>
+            {% endfor %}
+        </select>
+        <label for="manual-quantity-ordered">Quantity to order</label>
+        <input id="manual-quantity-ordered" name="quantity_ordered" type="number"
+               min="1" step="1" value="1" required>
+        <div class="item-actions">
+            <button class="button button-primary" type="submit">Queue manual order</button>
+            <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Cancel</a>
+        </div>
+    </form>
+    {% else %}
+    <p class="muted">Add an inventory item before placing a manual order.</p>
+    {% endif %}
+</section>
+{% endif %}
 </main>
-<script>
-    const automaticAmount = document.getElementById("automatic-amount");
-    const automaticAmountFields = document.getElementById("automatic-amount-fields");
-    const customQuantity = document.getElementById("quantity-ordered");
-    const automaticQuantity = document.getElementById("automatic-reorder-amount");
-    // Keep the user's custom quantity available when automatic ordering is turned off.
-    let previousCustomQuantity = customQuantity ? customQuantity.value : "";
-
-    function toggleAutomaticAmount() {
-        const automaticSelected = automaticAmount.checked;
-        automaticAmountFields.hidden = !automaticSelected;
-        customQuantity.required = !automaticSelected;
-        automaticQuantity.required = automaticSelected;
-        if (automaticSelected) {
-            // Mirror the configured automatic amount into the submitted quantity field.
-            previousCustomQuantity = customQuantity.value;
-            customQuantity.value = automaticQuantity.value;
-        } else {
-            // Restore the manual quantity so switching modes does not discard user input.
-            customQuantity.value = previousCustomQuantity || customQuantity.value;
-        }
-    }
-
-    if (automaticAmount) {
-        automaticAmount.addEventListener("change", toggleAutomaticAmount);
-        automaticQuantity.addEventListener("input", () => {
-            if (automaticAmount.checked) {
-                // Keep both visible values aligned while the automatic amount is edited.
-                customQuantity.value = automaticQuantity.value;
-            }
-        });
-    }
-</script>
 {% endblock %}

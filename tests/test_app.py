@@ -885,6 +885,44 @@ def test_reorder_page_accepts_custom_order_amount(tmp_path):
     assert quantity_ordered == 7
 
 
+def test_manual_order_page_can_queue_an_in_stock_item(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=12,
+            low_stock_threshold=2,
+            reorder_amount=0,
+        )
+
+    client = app.test_client()
+    login_as_admin(client)
+    page = client.get("/reorders?manual=1")
+
+    assert page.status_code == 200
+    assert b"Manual ordering" in page.data
+    assert b"Catan (12 in stock)" in page.data
+
+    response = client.post(
+        "/reorders",
+        data={"product_id": product_id, "quantity_ordered": "4"},
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        order = get_db().execute(
+            "SELECT product_id, quantity_ordered, status FROM reorders"
+        ).fetchone()
+
+    assert tuple(order) == (product_id, 4, "pending")
+
+
 def test_queued_order_can_be_cancelled(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(

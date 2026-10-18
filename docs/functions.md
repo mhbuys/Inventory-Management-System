@@ -122,32 +122,36 @@ This document describes the current item-management functions and where readers 
 ## `reorder_page`
 
 - **Location:** `app.py` (`reorder_page`)
-- **Purpose:** Displays active queued orders and, when a low-stock product is selected,
-  displays the order form for that product.
+- **Purpose:** Displays active queued orders and the available reorder forms.
 - **Parameters:**
-  - `product_id`: Optional query-string product ID. When supplied, the product must
-    be active and at or below its low-stock threshold.
-- **Order choices:** The user can enter a custom order quantity or select the automatic
-  reorder option. The queued-order page includes a back button that returns to the
-  queue without the selected product form.
-- **Access:** Requires an authenticated user.
+  - `product_id`: Optional query-string product ID. In the low-stock workflow, the
+    product must be active and at or below its low-stock threshold. In manual mode,
+    it may be any active product.
+  - `manual`: Set to `1` to display the manual-order form and all active inventory
+    items in the product selector.
+- **Order choices:** The low-stock workflow accepts a custom quantity for the selected
+  item. The page also provides a **Manual order** button that opens a selector for any
+  active item, including items that are not low in stock.
+- **Access:** Requires an authenticated administrator or manager.
 
 ## `queue_reorder`
 
 - **Location:** `app.py` (`queue_reorder`)
-- **Purpose:** Creates a pending record in the `reorders` table for a low-stock product.
+- **Purpose:** Creates a pending record in the `reorders` table for an active product.
 - **Parameters:**
-  - `product_id`: ID of the active low-stock product.
-  - `quantity_ordered`: Custom positive integer quantity.
+  - `product_id`: ID of the active product to order.
+  - `quantity_ordered`: Positive integer quantity for a custom or manual order.
   - `automatic_amount`: Checkbox value of `1` when automatic ordering is selected.
   - `automatic_reorder_amount`: Positive integer saved as the product's automatic
     reorder amount and used for the new order when automatic ordering is selected.
+- **Manual-order behavior:** Manual orders intentionally bypass the low-stock check,
+  allowing an administrator or manager to order any active inventory item.
 - **Database behavior:** Saves the automatic amount to `inventory.reorder_amount`,
   creates the pending reorder, and records a reorder event in `event_logs`.
-- **Errors:** Returns a client error for an invalid product, a product that is no
-  longer low in stock, an invalid or non-positive quantity, or an existing pending
-  or ordered reorder for the same product.
-- **Access:** Requires an authenticated user.
+- **Errors:** Returns a client error for an invalid or inactive product, an invalid
+  or non-positive quantity, or an existing pending or ordered reorder for the same
+  product.
+- **Access:** Requires an authenticated administrator or manager.
 
 ## `cancel_reorder`
 
@@ -161,20 +165,36 @@ This document describes the current item-management functions and where readers 
   cancelled, or otherwise inactive.
 - **Access:** Requires an authenticated user.
 
-## Automatic quantity synchronization
+## Manual order form
 
 - **Location:** `template/reorders.html`
-- **Purpose:** Keeps the custom order quantity field synchronized with the automatic
-  reorder amount when the automatic checkbox is selected.
-- **Behavior:** Checking the option copies the automatic amount into the custom
-  quantity field. Editing the automatic amount updates the custom quantity live.
-  Unchecking the option restores the user's previous custom quantity.
+- **Purpose:** Provides the queue page's manual-order user interface.
+- **Behavior:** The form lists every active inventory item, displays its current
+  quantity, accepts a positive order quantity, and submits to `queue_reorder`.
+  Server-side validation remains authoritative for the selected item, quantity,
+  duplicate active orders, and authorization.
+
+## Automatic ordering
+
+- **Location:** `items.py` (`queue_low_stock_reorder`) and
+  `app.py` (`queue_reorder`)
+- **Purpose:** Automatically creates a pending reorder when an active item's quantity
+  crosses from above its low-stock threshold to at or below that threshold.
+- **Order quantity:** Uses the item's configured `reorder_amount`. An amount of `0`
+  disables automatic ordering for that item.
+- **Duplicate prevention:** An existing pending or ordered reorder prevents another
+  active order for the same item. After stock rises above the threshold, a later
+  downward crossing can queue a new automatic order.
+- **Manual-order relationship:** Manual ordering is an additional option and does not
+  replace automatic low-stock ordering. Manual orders may be placed for any active
+  item, while automatic orders continue to be triggered by low-stock threshold
+  crossings.
 
 ## How To Find The Functions
 
 1. Open `items.py` in the project root.
 2. Open `app.py` to locate the inventory and reorder route functions.
 3. Open `template/users.html` to locate the user-management page and account dialogs.
-4. Open `template/reorders.html` to locate the automatic quantity synchronization.
+4. Open `template/reorders.html` to locate the low-stock and manual-order forms.
 5. Use your code editor's search feature to locate a function by name (e.g.,
    `add_item`, `users_page`, `reorder_page`, or `cancel_reorder`).
