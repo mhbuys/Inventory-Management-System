@@ -207,13 +207,15 @@ def create_app(test_config=None):
             updated=request.args.get("updated") == "1",
         )
 
-    # Show queued orders and, when selected, the order form for one low-stock item.
+    # Show queued orders and optionally open the manual-order form.
     @app.get("/reorders")
     @role_required("admin", "manager")
     def reorder_page():
         database = get_db()
         selected_item = None
         selected_product_id = request.args.get("product_id", type=int)
+        # Manual ordering may select any active item, not only low-stock items.
+        manual_order = request.args.get("manual") == "1"
         if selected_product_id is not None:
             selected_item = database.execute(
             """
@@ -223,10 +225,22 @@ def create_app(test_config=None):
             JOIN inventory ON inventory.product_id = products.product_id
             WHERE products.status = 'active'
               AND products.product_id = ?
-              AND inventory.quantity <= inventory.low_stock_threshold
+              AND (? OR inventory.quantity <= inventory.low_stock_threshold)
             """,
-            (selected_product_id,),
+            (selected_product_id, manual_order),
             ).fetchone()
+        manual_items = []
+        if manual_order:
+            # Populate the selector only when manual ordering was requested.
+            manual_items = database.execute(
+                """
+                SELECT products.product_id, products.name, inventory.quantity
+                FROM products
+                JOIN inventory ON inventory.product_id = products.product_id
+                WHERE products.status = 'active'
+                ORDER BY products.name COLLATE NOCASE
+                """
+            ).fetchall()
         queued_orders = database.execute(
             """
             SELECT reorders.reorder_id, reorders.product_id,
@@ -241,10 +255,12 @@ def create_app(test_config=None):
         return render_template(
             "reorders.html",
             selected_item=selected_item,
+            manual_items=manual_items,
+            manual_order=manual_order,
             queued_orders=queued_orders,
         )
 
-    # Queue one reorder using either the configured or a user-entered amount.
+    # Queue one reorder using either the configured automatic amount or a manual amount.
     @app.post("/reorders")
     @role_required("admin", "manager")
     def queue_reorder():
@@ -267,9 +283,9 @@ def create_app(test_config=None):
 
         if item is None:
             return "Invalid inventory item", 400
-        if item["quantity"] > item["low_stock_threshold"]:
-            return "Item is not currently low in stock", 400
 
+        # Manual orders intentionally skip the low-stock check; active-order and
+        # positive-quantity validation below still apply to every order.
         # The checkbox selects a saved automatic amount; otherwise use the custom quantity.
         use_automatic_amount = request.form.get("automatic_amount") == "1"
         if use_automatic_amount:
