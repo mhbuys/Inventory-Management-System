@@ -627,7 +627,58 @@ def test_inventory_page_adjusts_stock_by_requested_amount(tmp_path):
         )
 
 
-def test_inventory_low_stock_alert_opens_reorder_form_and_queues_order(tmp_path):
+def test_inventory_low_stock_alert_queues_automatic_order(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=3,
+            low_stock_threshold=2,
+            reorder_amount=10,
+        )
+
+    client = app.test_client()
+    login_as_admin(client)
+    response = client.post(
+        "/adjust-stock",
+        data={"product_id": product_id, "quantity_change": -2},
+    )
+    repeated_response = client.post(
+        "/adjust-stock",
+        data={"product_id": product_id, "quantity_change": -1},
+    )
+    inventory_page = client.get("/")
+    page = client.get(f"/reorders?product_id={product_id}")
+
+    assert response.status_code == 302
+    assert repeated_response.status_code == 302
+    assert b"ORDER PENDING: 10 units" in inventory_page.data
+    assert f"/reorders?product_id={product_id}".encode() not in inventory_page.data
+    assert page.status_code == 200
+    assert b"Catan" in page.data
+    assert b"Custom order quantity" in page.data
+    assert b'value="10"' in page.data
+
+    with app.app_context():
+        orders = get_db().execute(
+            """
+            SELECT product_id, quantity_ordered, status
+            FROM reorders
+            WHERE product_id = ?
+            """,
+            (product_id,),
+        ).fetchall()
+
+    assert [tuple(order) for order in orders] == [(product_id, 10, "pending")]
+
+
+def test_inventory_displays_pending_order_once_for_item_with_legacy_duplicates(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
         {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
@@ -640,46 +691,127 @@ def test_inventory_low_stock_alert_opens_reorder_form_and_queues_order(tmp_path)
             "board_game",
             quantity=1,
             low_stock_threshold=2,
-            reorder_amount=10,
+        )
+        get_db().execute("DROP INDEX idx_active_reorder_per_product")
+        get_db().executemany(
+            """
+            INSERT INTO reorders (product_id, quantity_ordered, status)
+            VALUES (?, ?, 'pending')
+            """,
+            [(product_id, 10), (product_id, 12)],
+        )
+        get_db().commit()
+
+    client = app.test_client()
+    login_as_admin(client)
+    page = client.get("/").get_data(as_text=True)
+
+    assert "LOW STOCK: 1 units — ORDER PENDING: 10 units" in page
+    assert "LOW STOCK: 1 units — reorder" not in page
+    assert page.count("<strong>Catan</strong>") == 1
+
+
+def test_low_stock_item_with_zero_reorder_amount_is_not_automatically_ordered(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=3,
+            low_stock_threshold=2,
+            reorder_amount=0,
         )
 
     client = app.test_client()
     login_as_admin(client)
-    inventory_page = client.get("/")
-    page = client.get(f"/reorders?product_id={product_id}")
-
-    assert b"LOW STOCK: 1 units" in inventory_page.data
-    assert f"/reorders?product_id={product_id}".encode() in inventory_page.data
-    assert page.status_code == 200
-    assert b"Catan" in page.data
-    assert b"Custom order quantity" in page.data
-    assert b'value="10"' in page.data
-
     response = client.post(
-        "/reorders",
+        "/adjust-stock",
+        data={"product_id": product_id, "quantity_change": -1},
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        order_count = get_db().execute(
+            "SELECT COUNT(*) FROM reorders WHERE product_id = ?", (product_id,)
+        ).fetchone()[0]
+
+    assert order_count == 0
+
+
+def test_saving_reorder_amount_does_not_queue_already_low_stock_item(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=1,
+            low_stock_threshold=2,
+            reorder_amount=0,
+        )
+
+    client = app.test_client()
+    login_as_admin(client)
+    response = client.post(
+        "/stock-planning",
         data={
             "product_id": product_id,
-            "quantity_ordered": "10",
+            "low_stock_threshold": "2",
+            "reorder_amount": "10",
         },
     )
 
     assert response.status_code == 302
-    assert response.headers["Location"] == "/reorders"
     with app.app_context():
-        order = (
-            get_db()
-            .execute(
-                """
-            SELECT product_id, quantity_ordered, status
-            FROM reorders
-            WHERE product_id = ?
-            """,
-                (product_id,),
-            )
-            .fetchone()
-        )
+        order_count = get_db().execute(
+            "SELECT COUNT(*) FROM reorders WHERE product_id = ?",
+            (product_id,),
+        ).fetchone()[0]
 
-    assert tuple(order) == (product_id, 10, "pending")
+    assert order_count == 0
+
+
+def test_automatic_reorder_only_queues_when_quantity_crosses_threshold(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app({"TESTING": True, "DATABASE": str(database_path)})
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=1,
+            low_stock_threshold=2,
+            reorder_amount=10,
+        )
+        order_count = lambda: get_db().execute(
+            "SELECT COUNT(*) FROM reorders WHERE product_id = ?", (product_id,)
+        ).fetchone()[0]
+        assert order_count() == 0
+
+        update_quantity(product_id, 0)
+        assert order_count() == 0
+
+        update_quantity(product_id, 3)
+        update_quantity(product_id, 2)
+        assert order_count() == 1
+
+        get_db().execute(
+            "UPDATE reorders SET status = 'cancelled' WHERE product_id = ?",
+            (product_id,),
+        )
+        get_db().commit()
+        update_quantity(product_id, 1)
+        assert order_count() == 1
 
 
 def test_reorder_page_prevents_duplicate_active_orders(tmp_path):
@@ -695,7 +827,7 @@ def test_reorder_page_prevents_duplicate_active_orders(tmp_path):
             "board_game",
             quantity=0,
             low_stock_threshold=2,
-            reorder_amount=10,
+            reorder_amount=0,
         )
 
     client = app.test_client()
@@ -729,7 +861,7 @@ def test_reorder_page_accepts_custom_order_amount(tmp_path):
             "board_game",
             quantity=0,
             low_stock_threshold=2,
-            reorder_amount=10,
+            reorder_amount=0,
         )
 
     client = app.test_client()
@@ -766,7 +898,7 @@ def test_queued_order_can_be_cancelled(tmp_path):
             "board_game",
             quantity=0,
             low_stock_threshold=2,
-            reorder_amount=10,
+            reorder_amount=0,
         )
 
     client = app.test_client()
