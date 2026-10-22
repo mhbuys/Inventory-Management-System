@@ -182,6 +182,12 @@ def create_app(test_config=None):
             )
             if result.rowcount == 0:
                 return "Invalid inventory item", 400
+            log_event(
+                "stock_planning_updated",
+                f"Updated stock planning settings for product {product_id}: "
+                f"low-stock threshold {low_stock_threshold}, "
+                f"reorder amount {reorder_amount}",
+            )
             database.commit()
             return redirect(
                 url_for("stock_planning_page", product_id=product_id, updated=1)
@@ -326,15 +332,15 @@ def create_app(test_config=None):
             """,
             (product_id, quantity_ordered),
         )
-        database.execute(
-            """
-            INSERT INTO event_logs (user_id, event_type, description)
-            VALUES (?, 'reorder_queued', ?)
-            """,
-            (
-                session["user_id"],
-                f"Queued reorder for {item['name']} ({quantity_ordered} units)",
-            ),
+        if use_automatic_amount and item["reorder_amount"] != quantity_ordered:
+            log_event(
+                "stock_planning_updated",
+                f"Updated automatic reorder amount for {item['name']} from "
+                f"{item['reorder_amount']} to {quantity_ordered}",
+            )
+        log_event(
+            "reorder_queued",
+            f"Queued reorder for {item['name']} ({quantity_ordered} units)",
         )
         database.commit()
         return redirect(url_for("reorder_page"))
@@ -361,12 +367,9 @@ def create_app(test_config=None):
             "UPDATE reorders SET status = 'cancelled' WHERE reorder_id = ?",
             (reorder_id,),
         )
-        database.execute(
-            """
-            INSERT INTO event_logs (user_id, event_type, description)
-            VALUES (?, 'reorder_cancelled', ?)
-            """,
-            (session["user_id"], f"Cancelled reorder for {order['name']}"),
+        log_event(
+            "reorder_cancelled",
+            f"Cancelled reorder for {order['name']}",
         )
         database.commit()
         return redirect(url_for("reorder_page"))
