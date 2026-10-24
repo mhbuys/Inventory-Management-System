@@ -132,6 +132,18 @@
             h1 { margin-bottom: .65rem; font-size: clamp(2rem, 4vw, 3.5rem); line-height: 1; }
             h2 { margin-bottom: .35rem; font-size: 1.5rem; }
             .muted { color: var(--muted); }
+            .flash-message {
+                margin-bottom: 1.5rem;
+                border-left: 4px solid var(--accent);
+                padding: .85rem 1rem;
+                color: var(--accent-dark);
+                background: #eef7f4;
+            }
+            .flash-message.error {
+                border-left-color: var(--danger);
+                color: var(--danger);
+                background: #fceeee;
+            }
 
             /* ### Design: panels frame the inventory workspace without heavy decoration. */
             .inventory-panel {
@@ -189,6 +201,7 @@
         </style>
     </head>
     <body>
+        <!-- Child templates provide each page's navigation and main content. -->
         {% block content %}{% endblock %}
     </body>
 </html>
