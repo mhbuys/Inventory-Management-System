@@ -845,7 +845,7 @@ def test_reorder_page_prevents_duplicate_active_orders(tmp_path):
     )
 
     assert duplicate.status_code == 409
-    assert b"This product already has an active order" in duplicate.data
+    assert b"An active reorder already exists for this item" in duplicate.data
 
 
 def test_reorder_page_accepts_custom_order_amount(tmp_path):
@@ -988,7 +988,7 @@ def test_cancel_missing_or_completed_order_returns_not_found(tmp_path):
     response = client.post("/reorders/999/cancel")
 
     assert response.status_code == 404
-    assert b"This order could not be found or has already been cancelled or completed." in response.data
+    assert b"Queued order not found" in response.data
 
 
 def test_add_item_page_does_not_show_automatic_reorder_amount(tmp_path):
