@@ -117,6 +117,7 @@
         </style>
     </head>
     <body>
+        <!-- Center the authentication form and supporting inventory-system message. -->
         <main class="login-page">
             <section class="login-layout" aria-labelledby="login-title">
                 <!-- Brand message and short description for the inventory system. -->
@@ -138,6 +139,7 @@
                     <!-- Session timeout message shown when the 30-minute inactivity limit ends the login. -->
                     <p class="muted" style="color: #a84848;">Your session has expired. Please log in again.</p>
                     {% endif %}
+                    <!-- Submit credentials to the login handler for authentication. -->
                     <form action="{{ url_for('login') }}" method="post">
                         <!-- Username and password are posted to the Flask auth handler. -->
                         <label for="username">Username</label>
