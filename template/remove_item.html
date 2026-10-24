@@ -21,10 +21,17 @@
 </header>
 
 <main class="page-shell">
+    <!-- Show the one-time result of a successful removal without leaving this form. -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="flash-message {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
     <section class="inventory-panel" aria-labelledby="remove-item-title">
         <p class="eyebrow">Inventory</p>
         <h1 id="remove-item-title">Remove Item</h1>
 
+        <!-- Submit the selected product ID to the protected removal route. -->
         <form class="stock-planning-form" method="post">
             <label for="product_id">Item</label>
             <select id="product_id" name="product_id" required>
@@ -33,6 +40,7 @@
                 {% endfor %}
             </select>
 
+            <!-- The cancel link leaves the removal workflow without changing inventory. -->
             <div class="item-actions">
                 <button class="button button-danger" type="submit">Remove</button>
                 <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Cancel</a>

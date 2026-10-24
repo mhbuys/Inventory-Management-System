@@ -25,10 +25,17 @@
 </header>
 
 <main class="page-shell">
+    <!-- Show the one-time result of a successful add without leaving this form. -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="flash-message {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
     <section class="inventory-panel" aria-labelledby="add-item-title">
         <p class="eyebrow">Inventory</p>
         <h1 id="add-item-title">Add Item</h1>
 
+        <!-- Submit the new product details to the add-item route. -->
         <form class="stock-planning-form" method="post">
             <label for="item-name">Item Name</label>
             <input id="item-name" type="text" name="name">
@@ -53,6 +60,7 @@
             <label for="low-stock-threshold">Low-stock threshold</label>
             <input id="low-stock-threshold" type="number" name="low_stock_threshold" min="0" value="0" required>
 
+            <!-- Keep the form available for another item after a successful submission. -->
             <div class="item-actions">
                 <button class="button button-primary" type="submit">Add Item</button>
                 <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Cancel</a>

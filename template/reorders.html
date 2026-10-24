@@ -26,6 +26,7 @@
 
 <main class="page-shell">
     {% if selected_item %}
+    <!-- Show the low-stock item form when an item was selected from Inventory. -->
     <section class="inventory-panel" aria-labelledby="reorder-item-title">
         <div class="inventory-heading">
             <div>
@@ -52,6 +53,45 @@
     </section>
     {% endif %}
 
+    {% if manual_order %}
+    <!-- Keep manual ordering above the queue so it is visible before existing orders. -->
+    <section class="inventory-panel" aria-labelledby="manual-order-title">
+        <div class="inventory-heading">
+            <div>
+                <p class="eyebrow">Manual ordering</p>
+                <h2 id="manual-order-title">Order an item</h2>
+                <p class="muted">Choose any active inventory item and the quantity to add to the queue.</p>
+            </div>
+        </div>
+
+        {% if manual_items %}
+        <form method="post" action="{{ url_for('queue_reorder') }}" id="manual-reorder-form">
+            <!-- The selected item and quantity are validated again by the server. -->
+            <label for="manual-product-id">Inventory item</label>
+            <select id="manual-product-id" name="product_id" required>
+                <option value="">Select an item</option>
+                {% for item in manual_items %}
+                <option value="{{ item['product_id'] }}"
+                    {% if selected_item and selected_item['product_id'] == item['product_id'] %}selected{% endif %}>
+                    {{ item['name'] }} ({{ item['quantity'] }} in stock)
+                </option>
+                {% endfor %}
+            </select>
+            <label for="manual-quantity-ordered">Quantity to order</label>
+            <input id="manual-quantity-ordered" name="quantity_ordered" type="number"
+                   min="1" step="1" value="1" required>
+            <div class="item-actions">
+                <button class="button button-primary" type="submit">Queue manual order</button>
+                <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Cancel</a>
+            </div>
+        </form>
+        {% else %}
+        <p class="muted">Add an inventory item before placing a manual order.</p>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    <!-- List queued orders and provide cancellation controls. -->
     <section class="inventory-panel" aria-labelledby="queued-orders-title">
         <div class="inventory-heading">
             <div>
@@ -88,42 +128,5 @@
             {% endfor %}
         </div>
     </section>
-{% if manual_order %}
-<!-- Keep manual ordering separate from the low-stock reorder form above. -->
-<section class="inventory-panel" aria-labelledby="manual-order-title">
-    <div class="inventory-heading">
-        <div>
-            <p class="eyebrow">Manual ordering</p>
-            <h2 id="manual-order-title">Order an item</h2>
-            <p class="muted">Choose any active inventory item and the quantity to add to the queue.</p>
-        </div>
-    </div>
-
-    {% if manual_items %}
-    <form method="post" action="{{ url_for('queue_reorder') }}" id="manual-reorder-form">
-        <!-- The selected item and quantity are validated again by the server. -->
-        <label for="manual-product-id">Inventory item</label>
-        <select id="manual-product-id" name="product_id" required>
-            <option value="">Select an item</option>
-            {% for item in manual_items %}
-            <option value="{{ item['product_id'] }}"
-                {% if selected_item and selected_item['product_id'] == item['product_id'] %}selected{% endif %}>
-                {{ item['name'] }} ({{ item['quantity'] }} in stock)
-            </option>
-            {% endfor %}
-        </select>
-        <label for="manual-quantity-ordered">Quantity to order</label>
-        <input id="manual-quantity-ordered" name="quantity_ordered" type="number"
-               min="1" step="1" value="1" required>
-        <div class="item-actions">
-            <button class="button button-primary" type="submit">Queue manual order</button>
-            <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Cancel</a>
-        </div>
-    </form>
-    {% else %}
-    <p class="muted">Add an inventory item before placing a manual order.</p>
-    {% endif %}
-</section>
-{% endif %}
 </main>
 {% endblock %}

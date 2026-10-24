@@ -25,6 +25,7 @@
 </header>
 
 <main class="page-shell">
+    <!-- Present the current active inventory and role-appropriate actions. -->
     <section class="inventory-panel" aria-labelledby="inventory-title">
         <div class="inventory-heading">
             <div>
@@ -37,6 +38,7 @@
 
         <div class="inventory-list">
             {% for item in inventory %}
+            <!-- Each row displays item details, stock status, and available adjustments. -->
             <article class="inventory-row">
                 <div>
                     <strong>{{ item["name"] }}</strong>
@@ -88,6 +90,7 @@
 </main>
 
 <div class="quantity-dialog" id="quantity-dialog" hidden>
+    <!-- This dialog collects the number of units for the selected stock adjustment. -->
     <div class="quantity-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="quantity-dialog-title">
         <h2 id="quantity-dialog-title">Adjust stock</h2>
         <p class="muted" id="quantity-dialog-message"></p>

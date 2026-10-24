@@ -8,7 +8,7 @@ from functools import wraps
 
 import pyotp
 import qrcode
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import close_db, get_db, init_db, log_event, query_db
@@ -691,18 +691,25 @@ def create_app(test_config=None):
     @role_required("admin", "manager")
     def add_item_page():
         if request.method == "POST":
-            add_item(
-                name=request.form["name"],
-                category=request.form["category"],
-                description=request.form.get("description") or None,
-                price=float(request.form.get("price") or 0),
-                quantity=int(request.form.get("quantity") or 0),
-                low_stock_threshold=int(
-                    request.form.get("low_stock_threshold") or 0
-                ),
-                user_id=session["user_id"],
-            )
-            return redirect(url_for("inventory_page"))
+            try:
+                add_item(
+                    name=request.form["name"],
+                    category=request.form["category"],
+                    description=request.form.get("description") or None,
+                    price=float(request.form.get("price") or 0),
+                    quantity=int(request.form.get("quantity") or 0),
+                    low_stock_threshold=int(
+                        request.form.get("low_stock_threshold") or 0
+                    ),
+                    user_id=session["user_id"],
+                )
+            except (KeyError, TypeError, ValueError):
+                flash("Unable to add the item. Check the entered values and try again.", "error")
+                return render_template("add_item.html"), 400
+
+            # Keep the user on the add form so another item can be entered immediately.
+            flash("Item added to the inventory.", "success")
+            return redirect(url_for("add_item_page"))
         return render_template("add_item.html")
 
     # Show active items that can be selected for removal.
@@ -717,7 +724,7 @@ def create_app(test_config=None):
             """)
         return render_template("remove_item.html", items=items)
 
-    # Delete the selected item and return to the current inventory list.
+    # Delete the selected item and return to the removal form with confirmation.
     @app.post("/remove-item")
     @role_required("admin")
     def remove_item_action():
@@ -725,9 +732,18 @@ def create_app(test_config=None):
             product_id = int(request.form.get("product_id", ""))
             remove_item(product_id)
         except (TypeError, ValueError):
-            return "Invalid inventory item", 400
+            items = query_db("""
+                SELECT product_id, name
+                FROM products
+                WHERE status = 'active'
+                ORDER BY name COLLATE NOCASE
+                """)
+            flash("Unable to remove the item. Select a valid inventory item and try again.", "error")
+            return render_template("remove_item.html", items=items), 400
 
-        return redirect(url_for("inventory_page"))
+        # Preserve the confirmation across the redirect back to the removal form.
+        flash("Item removed from the inventory.", "success")
+        return redirect(url_for("remove_item_page"))
 
     # Prompt for a new password when the account is flagged for a forced change. - NL
     @app.get("/account/change-password")

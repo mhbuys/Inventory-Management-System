@@ -41,6 +41,47 @@ This document describes the current item-management functions and where readers 
 - **Database behavior:** The database schema's foreign-key cascade also removes the product's related inventory record.
 - **Errors:** Raises `ValueError` when no product exists with the supplied ID.
 
+## `add_item_page`
+
+- **Location:** `app.py` (`add_item_page`)
+- **Purpose:** Displays the Add Item form and creates a product and inventory record
+  when the form is submitted.
+- **Methods:** Accepts `GET` to display the form and `POST` to add an item.
+- **Access:** Requires an authenticated administrator or manager.
+- **Successful submission:** Displays the confirmation message
+  `Item added to the inventory.` and redirects back to `/add-item`, keeping the
+  user on the Add Item page for additional entries.
+- **Failure behavior:** Keeps the user on the Add Item page, returns HTTP 400,
+  and displays an error confirmation when submitted values are invalid.
+- **Database behavior:** Uses `add_item` to commit the product and inventory
+  records together.
+
+## `remove_item_page`
+
+- **Location:** `app.py` (`remove_item_page`)
+- **Purpose:** Displays the removal form with all active inventory items available
+  for selection.
+- **Methods:** Accepts `GET` only.
+- **Access:** Requires an authenticated administrator.
+- **Successful removal behavior:** The corresponding `remove_item_action` route
+  redirects back to `/remove-item` and displays the confirmation message
+  `Item removed from the inventory.`.
+
+## `remove_item_action`
+
+- **Location:** `app.py` (`remove_item_action`)
+- **Purpose:** Removes the selected active inventory item from the database.
+- **Methods:** Accepts `POST` from the Remove Item form.
+- **Parameters:**
+  - `product_id`: ID of the product selected for removal.
+- **Access:** Requires an authenticated administrator.
+- **Successful submission:** Displays the confirmation message
+  `Item removed from the inventory.` and redirects back to `/remove-item`, keeping
+  the user on the Remove Item page.
+- **Failure behavior:** Keeps the user on the Remove Item page, returns HTTP 400,
+  and displays an error confirmation when the product ID is invalid or the item
+  cannot be found.
+
 ## `update_quantity`
 
 - **Location:** `items.py` (`update_quantity`)

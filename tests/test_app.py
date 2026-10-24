@@ -845,7 +845,7 @@ def test_reorder_page_prevents_duplicate_active_orders(tmp_path):
     )
 
     assert duplicate.status_code == 409
-    assert b"This product already has an active order" in duplicate.data
+    assert b"An active reorder already exists for this item" in duplicate.data
 
 
 def test_reorder_page_accepts_custom_order_amount(tmp_path):
@@ -908,6 +908,7 @@ def test_manual_order_page_can_queue_an_in_stock_item(tmp_path):
     assert page.status_code == 200
     assert b"Manual ordering" in page.data
     assert b"Catan (12 in stock)" in page.data
+    assert page.data.index(b"manual-order-title") < page.data.index(b"queued-orders-title")
 
     response = client.post(
         "/reorders",
@@ -987,7 +988,7 @@ def test_cancel_missing_or_completed_order_returns_not_found(tmp_path):
     response = client.post("/reorders/999/cancel")
 
     assert response.status_code == 404
-    assert b"This order could not be found or has already been cancelled or completed." in response.data
+    assert b"Queued order not found" in response.data
 
 
 def test_add_item_page_does_not_show_automatic_reorder_amount(tmp_path):
@@ -1027,6 +1028,58 @@ def test_add_item_page_requires_authentication(tmp_path):
     response = client.get("/add-item")
 
     assert response.status_code == 200
+    assert b"Add Item" in response.data
+
+
+def test_add_item_page_stays_on_page_and_confirms_item_added(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    login_as_admin(client)
+    response = client.post(
+        "/add-item",
+        data={
+            "name": "Catan",
+            "category": "board_game",
+            "description": "A strategy game",
+            "price": "34.99",
+            "quantity": "5",
+            "low_stock_threshold": "2",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/add-item"
+
+    page = client.get(response.headers["Location"])
+    assert page.status_code == 200
+    assert b"Item added to the inventory." in page.data
+
+
+def test_add_item_page_stays_on_page_and_confirms_failure(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+
+    client = app.test_client()
+    login_as_admin(client)
+    response = client.post(
+        "/add-item",
+        data={"name": "Invalid", "category": "board_game", "quantity": "not-a-number"},
+    )
+
+    assert response.status_code == 400
+    assert b"Unable to add the item." in response.data
     assert b"Add Item" in response.data
 
 
@@ -1120,7 +1173,10 @@ def test_remove_item_page_deletes_selected_inventory_item(tmp_path):
     response = client.post("/remove-item", data={"product_id": product_id})
 
     assert response.status_code == 302
-    assert response.headers["Location"] == "/"
+    assert response.headers["Location"] == "/remove-item"
+    page = client.get(response.headers["Location"])
+    assert page.status_code == 200
+    assert b"Item removed from the inventory." in page.data
     with app.app_context():
         assert (
             get_db()
@@ -1146,7 +1202,8 @@ def test_remove_item_rejects_invalid_product_id(tmp_path):
     response = client.post("/remove-item", data={"product_id": "not-a-number"})
 
     assert response.status_code == 400
-    assert b"Invalid inventory item" in response.data
+    assert b"Unable to remove the item." in response.data
+    assert b"Remove Item" in response.data
 
 
 # Logging out should remove access to protected pages from the current client.
