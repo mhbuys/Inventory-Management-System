@@ -70,12 +70,16 @@ def create_app(test_config=None):
 
     # Look up the signed-in user's role each request so role changes apply immediately.
     def current_role():
-        row = get_db().execute(
-            """SELECT roles.role_name FROM user_roles
+        row = (
+            get_db()
+            .execute(
+                """SELECT roles.role_name FROM user_roles
             JOIN roles ON roles.role_id = user_roles.role_id
             WHERE user_roles.user_id = ?""",
-            (session.get("user_id"),),
-        ).fetchone()
+                (session.get("user_id"),),
+            )
+            .fetchone()
+        )
         return row["role_name"] if row else "viewer"
 
     # Require login plus one of the listed roles; others get 403.
@@ -155,7 +159,9 @@ def create_app(test_config=None):
             """)
         return render_template("inventory.html", inventory=inventory)
 
-    @app.route("/shipping-control", methods=["GET", "POST"], endpoint="stock_planning_legacy")
+    @app.route(
+        "/shipping-control", methods=["GET", "POST"], endpoint="stock_planning_legacy"
+    )
     @app.route("/stock-planning", methods=["GET", "POST"])
     @role_required("admin", "manager")
     def stock_planning_page():
@@ -182,6 +188,12 @@ def create_app(test_config=None):
             )
             if result.rowcount == 0:
                 return "Invalid inventory item", 400
+            log_event(
+                "stock_planning_updated",
+                f"Updated stock planning settings for product {product_id}: "
+                f"low-stock threshold {low_stock_threshold}, "
+                f"reorder amount {reorder_amount}",
+            )
             database.commit()
             return redirect(
                 url_for("stock_planning_page", product_id=product_id, updated=1)
@@ -218,7 +230,7 @@ def create_app(test_config=None):
         manual_order = request.args.get("manual") == "1"
         if selected_product_id is not None:
             selected_item = database.execute(
-            """
+                """
             SELECT products.product_id, products.name, inventory.quantity,
                    inventory.low_stock_threshold, inventory.reorder_amount
             FROM products
@@ -227,7 +239,7 @@ def create_app(test_config=None):
               AND products.product_id = ?
               AND (? OR inventory.quantity <= inventory.low_stock_threshold)
             """,
-            (selected_product_id, manual_order),
+                (selected_product_id, manual_order),
             ).fetchone()
         manual_items = []
         if manual_order:
@@ -267,7 +279,7 @@ def create_app(test_config=None):
         try:
             product_id = int(request.form.get("product_id", ""))
         except (TypeError, ValueError):
-            return "Invalid inventory item", 400
+            return "Please select a valid inventory item before placing an order.", 400
 
         database = get_db()
         item = database.execute(
@@ -282,7 +294,7 @@ def create_app(test_config=None):
         ).fetchone()
 
         if item is None:
-            return "Invalid inventory item", 400
+            return "The selected product could not be found or is no longer available.", 404
 
         # Manual orders intentionally skip the low-stock check; active-order and
         # positive-quantity validation below still apply to every order.
@@ -290,24 +302,17 @@ def create_app(test_config=None):
         use_automatic_amount = request.form.get("automatic_amount") == "1"
         if use_automatic_amount:
             try:
-                quantity_ordered = int(
-                    request.form.get("automatic_reorder_amount", "")
-                )
+                quantity_ordered = int(request.form.get("automatic_reorder_amount", ""))
             except (TypeError, ValueError):
-                return "Enter a valid automatic reorder amount", 400
-            # Save the selected automatic amount for the next reorder of this item.
-            database.execute(
-                "UPDATE inventory SET reorder_amount = ? WHERE product_id = ?",
-                (quantity_ordered, product_id),
-            )
+                return "Please enter a valid whole number for the automatic reorder amount.", 400
         else:
             try:
                 quantity_ordered = int(request.form.get("quantity_ordered", ""))
             except (TypeError, ValueError):
-                return "Enter a valid order quantity", 400
+                return "Please enter a valid whole number for the order quantity.", 400
         # Both manual and automatic quantities must satisfy the positive-order constraint.
         if quantity_ordered <= 0:
-            return "Order quantity must be greater than zero", 400
+            return "Order quantity must be greater than zero. Please enter at least 1 item.", 400
 
         active_order = database.execute(
             """
@@ -317,7 +322,13 @@ def create_app(test_config=None):
             (product_id,),
         ).fetchone()
         if active_order is not None:
-            return "An active reorder already exists for this item", 409
+            return "This product already has an active order. Please cancel or complete the existing order before creating another.", 409
+        # Save the automatic amount only after all validation passes.
+        if use_automatic_amount:
+            database.execute(
+                "UPDATE inventory SET reorder_amount = ? WHERE product_id = ?",
+                (quantity_ordered, product_id),
+            )
 
         database.execute(
             """
@@ -326,15 +337,15 @@ def create_app(test_config=None):
             """,
             (product_id, quantity_ordered),
         )
-        database.execute(
-            """
-            INSERT INTO event_logs (user_id, event_type, description)
-            VALUES (?, 'reorder_queued', ?)
-            """,
-            (
-                session["user_id"],
-                f"Queued reorder for {item['name']} ({quantity_ordered} units)",
-            ),
+        if use_automatic_amount and item["reorder_amount"] != quantity_ordered:
+            log_event(
+                "stock_planning_updated",
+                f"Updated automatic reorder amount for {item['name']} from "
+                f"{item['reorder_amount']} to {quantity_ordered}",
+            )
+        log_event(
+            "reorder_queued",
+            f"Queued reorder for {item['name']} ({quantity_ordered} units)",
         )
         database.commit()
         return redirect(url_for("reorder_page"))
@@ -355,18 +366,15 @@ def create_app(test_config=None):
             (reorder_id,),
         ).fetchone()
         if order is None:
-            return "Queued order not found", 404
+            return "This order could not be found or has already been cancelled or completed.", 404
 
         database.execute(
             "UPDATE reorders SET status = 'cancelled' WHERE reorder_id = ?",
             (reorder_id,),
         )
-        database.execute(
-            """
-            INSERT INTO event_logs (user_id, event_type, description)
-            VALUES (?, 'reorder_cancelled', ?)
-            """,
-            (session["user_id"], f"Cancelled reorder for {order['name']}"),
+        log_event(
+            "reorder_cancelled",
+            f"Cancelled reorder for {order['name']}",
         )
         database.commit()
         return redirect(url_for("reorder_page"))
@@ -465,9 +473,13 @@ def create_app(test_config=None):
         username = request.form.get("username", "").strip()
         new_role = request.form.get("role", "")
         if not username:
-            return render_users_page(error="Enter a user name to create the account."), 400
+            return render_users_page(
+                error="Enter a user name to create the account."
+            ), 400
         if len(username) > 80:
-            return render_users_page(error="User name must be 80 characters or fewer."), 400
+            return render_users_page(
+                error="User name must be 80 characters or fewer."
+            ), 400
         if new_role not in ROLE_NAMES:
             return render_users_page(error="Select a valid role for the account."), 400
 
@@ -516,7 +528,9 @@ def create_app(test_config=None):
 
         if user_id == session["user_id"] and new_role != "admin":
             return redirect(
-                url_for("users_page", error="You cannot remove your own administrator role.")
+                url_for(
+                    "users_page", error="You cannot remove your own administrator role."
+                )
             )
 
         old = database.execute(
@@ -536,7 +550,9 @@ def create_app(test_config=None):
             ).fetchone()[0]
             if admin_count <= 1:
                 return redirect(
-                    url_for("users_page", error="At least one administrator is required.")
+                    url_for(
+                        "users_page", error="At least one administrator is required."
+                    )
                 )
 
         database.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
@@ -583,7 +599,9 @@ def create_app(test_config=None):
             ).fetchone()[0]
             if admin_count <= 1:
                 return redirect(
-                    url_for("users_page", error="At least one administrator is required.")
+                    url_for(
+                        "users_page", error="At least one administrator is required."
+                    )
                 )
 
         log_event("account_deleted", f"Deleted account {target['username']}")

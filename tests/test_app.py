@@ -674,8 +674,17 @@ def test_inventory_low_stock_alert_queues_automatic_order(tmp_path):
             """,
             (product_id,),
         ).fetchall()
+        reorder_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'reorder_queued'
+            ORDER BY log_id DESC LIMIT 1"""
+        ).fetchone()
 
     assert [tuple(order) for order in orders] == [(product_id, 10, "pending")]
+    assert tuple(reorder_event) == (
+        "reorder_queued",
+        "Automatically queued reorder for Catan (10 units)",
+    )
 
 
 def test_inventory_displays_pending_order_once_for_item_with_legacy_duplicates(tmp_path):
@@ -1124,8 +1133,18 @@ def test_stock_planning_updates_selected_item_settings(tmp_path):
             )
             .fetchone()
         )
+        stock_planning_event = get_db().execute(
+            """SELECT event_type, description FROM event_logs
+            WHERE event_type = 'stock_planning_updated'
+            ORDER BY log_id DESC LIMIT 1"""
+        ).fetchone()
 
     assert tuple(settings) == (4, 16)
+    assert tuple(stock_planning_event) == (
+        "stock_planning_updated",
+        "Updated stock planning settings for product "
+        f"{product_id}: low-stock threshold 4, reorder amount 16",
+    )
 
 
 def test_stock_planning_rejects_negative_settings(tmp_path):

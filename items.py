@@ -169,15 +169,10 @@ def queue_low_stock_reorder(product_id, user_id=None, previous_quantity=None):
     if result.rowcount == 0:
         return False
 
-    database.execute(
-        """
-        INSERT INTO event_logs (user_id, event_type, description)
-        VALUES (?, 'reorder_queued', ?)
-        """,
-        (
-            user_id,
-            f"Automatically queued reorder for {item['name']} "
-            f"({item['reorder_amount']} units)",
-        ),
+    log_event(
+        "reorder_queued",
+        f"Automatically queued reorder for {item['name']} "
+        f"({item['reorder_amount']} units)",
+        user_id=user_id,
     )
     return True
