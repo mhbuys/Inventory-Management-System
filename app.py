@@ -322,7 +322,7 @@ def create_app(test_config=None):
             (product_id,),
         ).fetchone()
         if active_order is not None:
-            return "This product already has an active order. Please cancel or complete the existing order before creating another.", 409
+            return "An active reorder already exists for this item. Please cancel or complete it before creating another.", 409
         # Save the automatic amount only after all validation passes.
         if use_automatic_amount:
             database.execute(
@@ -366,7 +366,7 @@ def create_app(test_config=None):
             (reorder_id,),
         ).fetchone()
         if order is None:
-            return "This order could not be found or has already been cancelled or completed.", 404
+            return "Queued order not found. It may already be cancelled or completed.", 404
 
         database.execute(
             "UPDATE reorders SET status = 'cancelled' WHERE reorder_id = ?",
