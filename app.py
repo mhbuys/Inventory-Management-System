@@ -267,7 +267,7 @@ def create_app(test_config=None):
         try:
             product_id = int(request.form.get("product_id", ""))
         except (TypeError, ValueError):
-            return "Invalid inventory item", 400
+            return "Please select a valid inventory item before placing an order.", 400
 
         database = get_db()
         item = database.execute(
@@ -282,7 +282,7 @@ def create_app(test_config=None):
         ).fetchone()
 
         if item is None:
-            return "Invalid inventory item", 400
+            return "The selected product could not be found or is no longer available.", 404
 
         # Manual orders intentionally skip the low-stock check; active-order and
         # positive-quantity validation below still apply to every order.
@@ -294,20 +294,15 @@ def create_app(test_config=None):
                     request.form.get("automatic_reorder_amount", "")
                 )
             except (TypeError, ValueError):
-                return "Enter a valid automatic reorder amount", 400
-            # Save the selected automatic amount for the next reorder of this item.
-            database.execute(
-                "UPDATE inventory SET reorder_amount = ? WHERE product_id = ?",
-                (quantity_ordered, product_id),
-            )
+                return "Please enter a valid whole number for the automatic reorder amount.", 400
         else:
             try:
                 quantity_ordered = int(request.form.get("quantity_ordered", ""))
             except (TypeError, ValueError):
-                return "Enter a valid order quantity", 400
+                return "Please enter a valid whole number for the order quantity.", 400
         # Both manual and automatic quantities must satisfy the positive-order constraint.
         if quantity_ordered <= 0:
-            return "Order quantity must be greater than zero", 400
+            return "Order quantity must be greater than zero. Please enter at least 1 item.", 400
 
         active_order = database.execute(
             """
@@ -317,7 +312,13 @@ def create_app(test_config=None):
             (product_id,),
         ).fetchone()
         if active_order is not None:
-            return "An active reorder already exists for this item", 409
+            return "This product already has an active order. Please cancel or complete the existing order before creating another.", 409
+        # Save the automatic amount only after all validation passes.
+        if use_automatic_amount:
+            database.execute(
+                "UPDATE inventory SET reorder_amount = ? WHERE product_id = ?",
+                (quantity_ordered, product_id),
+            )
 
         database.execute(
             """
@@ -355,7 +356,7 @@ def create_app(test_config=None):
             (reorder_id,),
         ).fetchone()
         if order is None:
-            return "Queued order not found", 404
+            return "This order could not be found or has already been cancelled or completed.", 404
 
         database.execute(
             "UPDATE reorders SET status = 'cancelled' WHERE reorder_id = ?",
