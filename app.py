@@ -146,6 +146,11 @@ def create_app(test_config=None):
             SELECT products.product_id, products.name, products.category,
                    products.price, inventory.quantity,
                    inventory.low_stock_threshold,
+                   products.supplier_id,
+                   products.supplier_sku,
+                   suppliers.supplier_name,
+                   suppliers.contact_email,
+                   suppliers.contact_phone,
                                      (SELECT reorders.quantity_ordered
                                         FROM reorders
                                         WHERE reorders.product_id = products.product_id
@@ -154,6 +159,7 @@ def create_app(test_config=None):
                                         LIMIT 1) AS pending_order_quantity
             FROM products
             JOIN inventory ON inventory.product_id = products.product_id
+            LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
             WHERE products.status = 'active'
             ORDER BY products.name COLLATE NOCASE
             """)
