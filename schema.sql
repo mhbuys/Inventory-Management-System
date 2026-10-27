@@ -11,6 +11,16 @@ DROP TABLE IF EXISTS user_2fa;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS inventory;
 DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS suppliers;
+
+-- Supplier information used for inventory ordering.
+CREATE TABLE suppliers (
+    supplier_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_name TEXT NOT NULL UNIQUE,
+    contact_email TEXT,
+    contact_phone TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Core product catalog. Each item is unique by name and belongs to an allowed category.
 CREATE TABLE products (
@@ -20,8 +30,11 @@ CREATE TABLE products (
     price REAL NOT NULL DEFAULT 0 CHECK (price >= 0),
     category TEXT NOT NULL CHECK (category IN ('board_game', 'card_game', 'dice', 'miniature')),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'discontinued')),
+    supplier_id INTEGER,
+    supplier_sku TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    FOREIGN KEY (supplier_id) REFERENCES suppliers (supplier_id) ON DELETE SET NULL
 );
 
 -- Inventory totals and reorder settings for each product.
@@ -123,3 +136,4 @@ CREATE UNIQUE INDEX idx_active_reorder_per_product
     WHERE status IN ('pending', 'ordered');
 CREATE INDEX idx_event_logs_user_id ON event_logs (user_id);
 CREATE INDEX idx_user_backup_codes_user_id ON user_backup_codes (user_id); -- Speeds up backup code lookups during 2FA login - NL
+CREATE INDEX idx_products_supplier_id ON products (supplier_id);
