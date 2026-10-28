@@ -102,6 +102,7 @@
             <div class="item-actions">
                 <!-- Manual orders can be placed for any active inventory item. -->
                 <a class="button button-primary" href="{{ url_for('reorder_page', manual=1) }}">Add order</a>
+                <a class="button button-quiet" href="{{ url_for('export_reorders') }}">Export to Excel</a>
                 <span class="status">{{ queued_orders|length }} active orders</span>
             </div>
         </div>
