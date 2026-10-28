@@ -726,6 +726,10 @@ def create_app(test_config=None):
                         request.form.get("low_stock_threshold") or 0
                     ),
                     user_id=session["user_id"],
+                     supplier_name=request.form.get("supplier_name") or None,
+                    contact_email=request.form.get("contact_email") or None,
+                    contact_phone=request.form.get("contact_phone") or None,
+                    supplier_sku=request.form.get("supplier_sku") or None,
                 )
             except (KeyError, TypeError, ValueError):
                 flash("Unable to add the item. Check the entered values and try again.", "error")
