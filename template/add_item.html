@@ -59,7 +59,45 @@
 
             <label for="low-stock-threshold">Low-stock threshold</label>
             <input id="low-stock-threshold" type="number" name="low_stock_threshold" min="0" value="0" required>
+            
+            <!-- Supplier Information -->
+        <div class="supplier-information">
+            <h3>Supplier Information</h3>
 
+        <label for="supplier_name">Supplier Name</label>
+        <input
+            type="text"
+            id="supplier_name"
+            name="supplier_name"
+            maxlength="100"
+            placeholder="Enter supplier name"
+        >
+
+        <label for="contact_email">Supplier Email</label>
+        <input
+            type="email"
+            id="contact_email"
+            name="contact_email"
+            placeholder="supplier@example.com"
+        >
+
+        <label for="contact_phone">Supplier Phone</label>
+        <input
+            type="tel"
+            id="contact_phone"
+            name="contact_phone"
+            placeholder="Enter phone number"
+        >
+
+        <label for="supplier_sku">Supplier SKU</label>
+        <input
+            type="text"
+            id="supplier_sku"
+            name="supplier_sku"
+            placeholder="Enter supplier product ID"
+        >
+            </div>
+            
             <!-- Keep the form available for another item after a successful submission. -->
             <div class="item-actions">
                 <button class="button button-primary" type="submit">Add Item</button>
