@@ -10,17 +10,61 @@ def add_item(
     low_stock_threshold=0,
     reorder_amount=0,
     user_id=None,
+    supplier_name=None,
+    contact_email=None,
+    contact_phone=None,
+    supplier_sku=None,
 ):
     """Add a product and its inventory record, returning the product ID."""
     database = get_db()
     try:
+        # Find or create the supplier associated with this product.
+        supplier_id = None
+        supplier_name = (supplier_name or "").strip()
+        contact_email = (contact_email or "").strip() or None
+        contact_phone = (contact_phone or "").strip() or None
+        supplier_sku = (supplier_sku or "").strip() or None
+
+        if not supplier_name and (contact_email or contact_phone or supplier_sku):
+            raise ValueError("Supplier name is required for supplier details")
+
+        if supplier_name:
+            supplier = database.execute(
+                """
+                SELECT supplier_id FROM suppliers
+                WHERE supplier_name = ? COLLATE NOCASE
+                """,
+                (supplier_name,),
+            ).fetchone()
+
+            if supplier:
+                supplier_id = supplier["supplier_id"]
+            else:
+                cursor = database.execute(
+                    """
+                    INSERT INTO suppliers
+                    (supplier_name, contact_email, contact_phone)
+                    VALUES (?, ?, ?)
+                    """,
+                    (supplier_name, contact_email, contact_phone),
+                )
+                supplier_id = cursor.lastrowid
+
         # Store catalog details first so the inventory row can reference the new ID.
         product = database.execute(
             """
-            INSERT INTO products (name, description, price, category)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO products
+            (name, description, price, category, supplier_id, supplier_sku)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (name, description, price, category),
+            (
+                name,
+                description,
+                price,
+                category,
+                supplier_id,
+                supplier_sku,
+            ),
         )
         product_id = product.lastrowid
         database.execute(

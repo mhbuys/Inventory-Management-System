@@ -146,6 +146,11 @@ def create_app(test_config=None):
             SELECT products.product_id, products.name, products.category,
                    products.price, inventory.quantity,
                    inventory.low_stock_threshold,
+                   products.supplier_id,
+                   products.supplier_sku,
+                   suppliers.supplier_name,
+                   suppliers.contact_email,
+                   suppliers.contact_phone,
                                      (SELECT reorders.quantity_ordered
                                         FROM reorders
                                         WHERE reorders.product_id = products.product_id
@@ -154,6 +159,7 @@ def create_app(test_config=None):
                                         LIMIT 1) AS pending_order_quantity
             FROM products
             JOIN inventory ON inventory.product_id = products.product_id
+            LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
             WHERE products.status = 'active'
             ORDER BY products.name COLLATE NOCASE
             """)
@@ -257,9 +263,12 @@ def create_app(test_config=None):
             """
             SELECT reorders.reorder_id, reorders.product_id,
                    products.name, reorders.quantity_ordered,
-                   reorders.reorder_date, reorders.status
+                   reorders.reorder_date, reorders.status,
+                   suppliers.supplier_name, suppliers.contact_email,
+                   suppliers.contact_phone
             FROM reorders
             JOIN products ON products.product_id = reorders.product_id
+            LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
             WHERE reorders.status IN ('pending', 'ordered')
             ORDER BY reorders.reorder_date DESC, reorders.reorder_id DESC
             """
@@ -720,6 +729,10 @@ def create_app(test_config=None):
                         request.form.get("low_stock_threshold") or 0
                     ),
                     user_id=session["user_id"],
+                     supplier_name=request.form.get("supplier_name") or None,
+                    contact_email=request.form.get("contact_email") or None,
+                    contact_phone=request.form.get("contact_phone") or None,
+                    supplier_sku=request.form.get("supplier_sku") or None,
                 )
             except (KeyError, TypeError, ValueError):
                 flash("Unable to add the item. Check the entered values and try again.", "error")

@@ -111,10 +111,20 @@
             <article class="inventory-row">
                 <div>
                     <strong>{{ order["name"] }}</strong>
-                    <span class="muted">
-                        {{ order["quantity_ordered"] }} units
-                        | queued {{ order["reorder_date"] }}
-                    </span>
+                    <div style="display: flex; flex-direction: column; gap: .15rem;">
+                        <span class="muted">
+                            {{ order["quantity_ordered"] }} units
+                            | queued {{ order["reorder_date"] }}
+                        </span>
+                        {% if order["supplier_name"] %}
+                        <span class="muted">
+                            Supplier: {{ order["supplier_name"] }}
+                            {% if order["contact_email"] or order["contact_phone"] %}
+                            | {{ order["contact_email"] or order["contact_phone"] }}
+                            {% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="item-actions">
                     <span class="status">{{ order["status"] }}</span>
