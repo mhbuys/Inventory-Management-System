@@ -933,6 +933,44 @@ def test_manual_order_page_can_queue_an_in_stock_item(tmp_path):
     assert tuple(order) == (product_id, 4, "pending")
 
 
+def test_reorder_page_displays_supplier_details(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=0,
+            low_stock_threshold=2,
+            reorder_amount=0,
+            supplier_name="Northwind Games",
+            contact_email="orders@northwind.example",
+            contact_phone="555-0100",
+        )
+
+    client = app.test_client()
+    login_as_admin(client)
+    response = client.post(
+        "/reorders",
+        data={"product_id": product_id, "quantity_ordered": "7"},
+    )
+
+    assert response.status_code == 302
+    page = client.get("/reorders")
+    assert page.status_code == 200
+    order_details = page.data.split(b"Catan", 1)[1].split(b"Cancel order", 1)[0]
+    assert b'display: flex; flex-direction: column' in order_details
+    assert order_details.index(b"7 units") < order_details.index(b"Supplier: Northwind Games")
+    assert order_details.index(b"Supplier: Northwind Games") < order_details.index(
+        b"orders@northwind.example"
+    )
+    assert b"orders@northwind.example" in order_details
+
+
 def test_queued_order_can_be_cancelled(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(

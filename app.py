@@ -263,9 +263,12 @@ def create_app(test_config=None):
             """
             SELECT reorders.reorder_id, reorders.product_id,
                    products.name, reorders.quantity_ordered,
-                   reorders.reorder_date, reorders.status
+                   reorders.reorder_date, reorders.status,
+                   suppliers.supplier_name, suppliers.contact_email,
+                   suppliers.contact_phone
             FROM reorders
             JOIN products ON products.product_id = reorders.product_id
+            LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
             WHERE reorders.status IN ('pending', 'ordered')
             ORDER BY reorders.reorder_date DESC, reorders.reorder_id DESC
             """
