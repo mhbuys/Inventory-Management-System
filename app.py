@@ -8,7 +8,8 @@ from functools import wraps
 
 import pyotp
 import qrcode
-from flask import Flask, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from openpyxl import Workbook
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import close_db, get_db, init_db, log_event, query_db
@@ -279,6 +280,45 @@ def create_app(test_config=None):
             manual_items=manual_items,
             manual_order=manual_order,
             queued_orders=queued_orders,
+        )
+
+    # Download the queued orders as an Excel workbook.
+    @app.get("/reorders/export")
+    @role_required("admin", "manager")
+    def export_reorders():
+        rows = get_db().execute(
+            """
+            SELECT reorders.reorder_id, products.name, reorders.quantity_ordered,
+                   reorders.reorder_date, reorders.status,
+                   suppliers.supplier_name, suppliers.contact_email,
+                   suppliers.contact_phone
+            FROM reorders
+            JOIN products ON products.product_id = reorders.product_id
+            LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
+            WHERE reorders.status IN ('pending', 'ordered')
+            ORDER BY reorders.reorder_date DESC, reorders.reorder_id DESC
+            """
+        ).fetchall()
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Reorders"
+        sheet.append(["Order ID", "Item", "Quantity", "Queued", "Status",
+                      "Supplier", "Supplier email", "Supplier phone"])
+        for row in rows:
+            sheet.append(list(row))
+        # Force text cells to stay literal so values like "=1+1" never become formulas.
+        for sheet_row in sheet.iter_rows(min_row=2):
+            for cell in sheet_row:
+                if isinstance(cell.value, str):
+                    cell.data_type = "s"
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="reorders.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     # Queue one reorder using either the configured automatic amount or a manual amount.
