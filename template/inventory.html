@@ -46,6 +46,16 @@
                         {{ item["category"]|replace("_", " ")|title }}
                         | ${{ "%.2f"|format(item["price"]) }}
                     </span>
+
+                    <!-- Display supplier information when available. -->
+                    {% if item["supplier_name"] %}
+                    <div class="muted">
+                        Supplier: {{ item["supplier_name"] }}
+                        {% if item["supplier_sku"] %}
+                        | Supplier SKU: {{ item["supplier_sku"] }}
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
 
                 {% if item["pending_order_quantity"] is not none %}
