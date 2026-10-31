@@ -60,6 +60,7 @@
         {% if current_role in ('admin', 'manager') %}
         <a class="button button-quiet" href="{{ url_for('stock_planning_page') }}">Stock Planning</a>
         <a class="button button-quiet" href="{{ url_for('reorder_page') }}">Reorder queue</a>
+        <a class="button button-quiet" href="{{ url_for('manage_suppliers_page') }}">Manage suppliers</a>
         {% endif %}
         {% if current_role == 'admin' %}
         <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
