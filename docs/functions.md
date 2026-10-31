@@ -27,8 +27,38 @@ This document describes the current item-management functions and where readers 
   - `reorder_amount`: Quantity to order when restocking. Defaults to `0`. This remains
     available to application code, but the Add Item page now configures it from the
     reorder workflow instead of collecting it during item creation.
+  - `supplier_id`: Optional ID of an existing supplier from the supplier-management
+    page. The web form uses this value instead of collecting supplier details while
+    an item is being added.
 - **Returns:** The new product ID.
 - **Database behavior:** The product and inventory records are committed together. If either insert fails, the transaction is rolled back.
+
+## `add_supplier`
+
+- **Location:** `items.py`, line 91 (`add_supplier`)
+- **Purpose:** Creates a supplier record in the `suppliers` table.
+- **Parameters:**
+  - `supplier_name`: Required supplier name.
+  - `contact_email`: Required supplier email address.
+  - `contact_phone`: Required supplier phone number.
+- **Returns:** The new supplier ID.
+- **Database behavior:** The supplier is committed as one transaction. Database
+  errors roll back the insert.
+- **Duplicate behavior:** The `manage_suppliers_page` route checks supplier name,
+  email, and phone before calling this helper and reports duplicate information to
+  the user.
+
+## `remove_supplier`
+
+- **Location:** `items.py`, line 112 (`remove_supplier`)
+- **Purpose:** Removes a supplier by ID.
+- **Parameters:**
+  - `supplier_id`: ID of the supplier to remove.
+- **Returns:** Nothing after a successful deletion.
+- **Database behavior:** Products assigned to the supplier retain their inventory
+  records and have their supplier reference cleared by the schema's
+  `ON DELETE SET NULL` rule.
+- **Errors:** Raises `ValueError` when no supplier exists with the supplied ID.
 
 ## `remove_item`
 
@@ -55,6 +85,22 @@ This document describes the current item-management functions and where readers 
   and displays an error confirmation when submitted values are invalid.
 - **Database behavior:** Uses `add_item` to commit the product and inventory
   records together.
+
+## `manage_suppliers_page`
+
+- **Location:** `app.py` (`manage_suppliers_page`)
+- **Purpose:** Provides the Manage suppliers page for creating and removing supplier
+  records.
+- **Methods:** Accepts `GET` to display suppliers and `POST` to add or remove one.
+- **Access:** Requires an authenticated administrator or manager.
+- **Add behavior:** Requires a supplier name, email, and phone. Supplier names,
+  email addresses, and phone numbers are checked against existing records so
+  repeated supplier information produces an error instead of another record.
+- **Remove behavior:** Presents existing suppliers in a dropdown and removes the
+  selected supplier through `remove_supplier`.
+- **Routes:** Available at `/manage-suppliers` and the shorter `/suppliers` alias.
+- **Failure behavior:** Displays a flash error and redirects back to the supplier
+  management page without changing the database.
 
 ## `remove_item_page`
 
