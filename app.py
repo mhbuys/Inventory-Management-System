@@ -13,7 +13,7 @@ from openpyxl import Workbook
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import close_db, get_db, init_db, log_event, query_db
-from items import add_item, adjust_quantity, remove_item
+from items import add_item, add_supplier, adjust_quantity, remove_item, remove_supplier
 
 ROLE_NAMES = ("admin", "manager", "employee", "viewer")
 
@@ -769,19 +769,69 @@ def create_app(test_config=None):
                         request.form.get("low_stock_threshold") or 0
                     ),
                     user_id=session["user_id"],
-                     supplier_name=request.form.get("supplier_name") or None,
-                    contact_email=request.form.get("contact_email") or None,
-                    contact_phone=request.form.get("contact_phone") or None,
-                    supplier_sku=request.form.get("supplier_sku") or None,
+                    supplier_id=int(request.form["supplier_id"])
+                    if request.form.get("supplier_id")
+                    else None,
                 )
             except (KeyError, TypeError, ValueError):
                 flash("Unable to add the item. Check the entered values and try again.", "error")
-                return render_template("add_item.html"), 400
+                suppliers = query_db(
+                    "SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name COLLATE NOCASE"
+                )
+                return render_template("add_item.html", suppliers=suppliers), 400
 
             # Keep the user on the add form so another item can be entered immediately.
             flash("Item added to the inventory.", "success")
             return redirect(url_for("add_item_page"))
-        return render_template("add_item.html")
+        suppliers = query_db(
+            "SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name COLLATE NOCASE"
+        )
+        return render_template("add_item.html", suppliers=suppliers)
+
+    @app.route("/manage-suppliers", methods=["GET", "POST"])
+    @app.route("/suppliers", methods=["GET", "POST"])
+    @role_required("admin", "manager")
+    def manage_suppliers_page():
+        if request.method == "POST":
+            action = request.form.get("action", "add")
+            try:
+                if action == "remove":
+                    # The form submits the selected dropdown value as the supplier ID.
+                    remove_supplier(int(request.form.get("supplier_id", "")))
+                    flash("Supplier removed.", "success")
+                else:
+                    supplier_name = request.form.get("supplier_name", "").strip()
+                    contact_email = request.form.get("contact_email", "").strip()
+                    contact_phone = request.form.get("contact_phone", "").strip()
+                    if not supplier_name or not contact_email or not contact_phone:
+                        raise ValueError("All supplier fields are required.")
+                    # Reject matching identity or contact information before insertion.
+                    duplicate = get_db().execute(
+                        """
+                        SELECT 1 FROM suppliers
+                        WHERE supplier_name = ? COLLATE NOCASE
+                           OR contact_email = ? COLLATE NOCASE
+                           OR contact_phone = ?
+                        """,
+                        (supplier_name, contact_email, contact_phone),
+                    ).fetchone()
+                    if duplicate:
+                        raise ValueError("A supplier with that information already exists.")
+                    add_supplier(supplier_name, contact_email, contact_phone)
+                    flash("Supplier added.", "success")
+            except (TypeError, ValueError, sqlite3.IntegrityError) as error:
+                get_db().rollback()
+                flash(str(error) or "Unable to update suppliers.", "error")
+            return redirect(url_for("manage_suppliers_page"))
+
+        suppliers = query_db(
+            """
+            SELECT supplier_id, supplier_name, contact_email, contact_phone
+            FROM suppliers
+            ORDER BY supplier_name COLLATE NOCASE
+            """
+        )
+        return render_template("manage_suppliers.html", suppliers=suppliers)
 
     # Show active items that can be selected for removal.
     @app.get("/remove-item")
