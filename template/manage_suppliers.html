@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Suppliers | Inventory Management System{% endblock %}
+
+{% block content %}
+<header class="top-banner">
+    <p class="brand">Inventory Management System</p>
+    <!-- Keep the main inventory workflows available from supplier management. -->
+    <nav class="banner-actions" aria-label="Supplier actions">
+        <a class="button button-quiet" href="{{ url_for('inventory_page') }}">Inventory</a>
+        <a class="button button-quiet" href="{{ url_for('add_item_page') }}">Add item</a>
+        <a class="button button-quiet" href="{{ url_for('logout') }}">Log out</a>
+    </nav>
+</header>
+
+<main class="page-shell">
+    <!-- Show one-time success and validation messages after supplier actions. -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="flash-message {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
+    <section class="inventory-panel" aria-labelledby="suppliers-title">
+        <p class="eyebrow">Inventory</p>
+        <h1 id="suppliers-title">Manage suppliers</h1>
+        <p class="muted">Add supplier records here before assigning them to inventory items.</p>
+
+        <!-- Submit all required supplier details to the supplier management route. -->
+        <form class="stock-planning-form" method="post">
+            <input type="hidden" name="action" value="add">
+            <label for="supplier-name">Supplier name</label>
+            <input id="supplier-name" name="supplier_name" type="text" maxlength="100" required>
+            <label for="contact-email">Email</label>
+            <input id="contact-email" name="contact_email" type="email" required>
+            <label for="contact-phone">Phone</label>
+            <input id="contact-phone" name="contact_phone" type="tel" required>
+            <div class="item-actions">
+                <button class="button button-primary" type="submit">Add supplier</button>
+            </div>
+        </form>
+
+        <div class="inventory-list">
+            <h2>Remove supplier</h2>
+            {% if suppliers %}
+            <!-- Use supplier IDs behind the scenes while displaying readable names. -->
+            <form class="stock-planning-form" method="post">
+                <input type="hidden" name="action" value="remove">
+                <label for="remove-supplier-id">Supplier name</label>
+                <select id="remove-supplier-id" name="supplier_id" required>
+                    <option value="" selected disabled>Select a supplier</option>
+                    {% for supplier in suppliers %}
+                    <!-- Include the email to help distinguish similarly named suppliers. -->
+                    <option value="{{ supplier['supplier_id'] }}">
+                        {{ supplier['supplier_name'] }} — {{ supplier['contact_email'] }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="item-actions">
+                    <!-- The server handles removal and clears related product references. -->
+                    <button class="button button-danger" type="submit">Remove supplier</button>
+                </div>
+            </form>
+            {% else %}
+            <p class="muted">No suppliers have been added.</p>
+            {% endif %}
+        </div>
+    </section>
+</main>
+{% endblock %}

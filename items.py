@@ -14,29 +14,30 @@ def add_item(
     contact_email=None,
     contact_phone=None,
     supplier_sku=None,
+    supplier_id=None,
 ):
     """Add a product and its inventory record, returning the product ID."""
     database = get_db()
     try:
-        # Find or create the supplier associated with this product.
-        supplier_id = None
         supplier_name = (supplier_name or "").strip()
         contact_email = (contact_email or "").strip() or None
         contact_phone = (contact_phone or "").strip() or None
         supplier_sku = (supplier_sku or "").strip() or None
 
-        if not supplier_name and (contact_email or contact_phone or supplier_sku):
-            raise ValueError("Supplier name is required for supplier details")
-
-        if supplier_name:
+        # Item creation may reference a managed supplier selected on the Add Item page.
+        if supplier_id is not None:
             supplier = database.execute(
-                """
-                SELECT supplier_id FROM suppliers
-                WHERE supplier_name = ? COLLATE NOCASE
-                """,
+                "SELECT supplier_id FROM suppliers WHERE supplier_id = ?",
+                (supplier_id,),
+            ).fetchone()
+            if supplier is None:
+                raise ValueError("Select a valid supplier")
+        # Keep direct callers compatible by resolving or creating a legacy supplier name.
+        elif supplier_name:
+            supplier = database.execute(
+                "SELECT supplier_id FROM suppliers WHERE supplier_name = ? COLLATE NOCASE",
                 (supplier_name,),
             ).fetchone()
-
             if supplier:
                 supplier_id = supplier["supplier_id"]
             else:
@@ -49,6 +50,8 @@ def add_item(
                     (supplier_name, contact_email, contact_phone),
                 )
                 supplier_id = cursor.lastrowid
+        elif contact_email or contact_phone or supplier_sku:
+            raise ValueError("Supplier name is required for supplier details")
 
         # Store catalog details first so the inventory row can reference the new ID.
         product = database.execute(
@@ -85,6 +88,39 @@ def add_item(
         raise
 
     return product_id
+
+
+def add_supplier(supplier_name, contact_email, contact_phone):
+    """Create a supplier and return its ID."""
+    database = get_db()
+    supplier_name = supplier_name.strip()
+    contact_email = contact_email.strip()
+    contact_phone = contact_phone.strip()
+    try:
+        cursor = database.execute(
+            """
+            INSERT INTO suppliers (supplier_name, contact_email, contact_phone)
+            VALUES (?, ?, ?)
+            """,
+            (supplier_name, contact_email, contact_phone),
+        )
+        database.commit()
+    except Exception:
+        database.rollback()
+        raise
+    return cursor.lastrowid
+
+
+def remove_supplier(supplier_id):
+    """Remove a supplier and leave associated products without a supplier."""
+    database = get_db()
+    # Foreign-key behavior clears supplier references from associated products.
+    result = database.execute(
+        "DELETE FROM suppliers WHERE supplier_id = ?", (supplier_id,)
+    )
+    if result.rowcount == 0:
+        raise ValueError(f"No supplier found with ID {supplier_id}")
+    database.commit()
 
 
 def remove_item(product_id):
