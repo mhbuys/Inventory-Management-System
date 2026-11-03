@@ -1078,6 +1078,52 @@ def test_add_item_page_requires_authentication(tmp_path):
     assert b"Add Item" in response.data
 
 
+def test_add_item_page_lists_and_assigns_managed_suppliers(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        add_item(
+            "Existing item",
+            "board_game",
+            supplier_name="Northwind Games",
+        )
+        supplier_id = get_db().execute(
+            "SELECT supplier_id FROM suppliers WHERE supplier_name = ?",
+            ("Northwind Games",),
+        ).fetchone()["supplier_id"]
+
+    client = app.test_client()
+    login_as_admin(client)
+    page = client.get("/add-item")
+
+    assert page.status_code == 200
+    assert f'value="{supplier_id}">Northwind Games'.encode() in page.data
+
+    response = client.post(
+        "/add-item",
+        data={
+            "name": "New item",
+            "category": "card_game",
+            "quantity": "3",
+            "low_stock_threshold": "1",
+            "supplier_id": str(supplier_id),
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        product = get_db().execute(
+            "SELECT supplier_id FROM products WHERE name = ?",
+            ("New item",),
+        ).fetchone()
+
+    assert product["supplier_id"] == supplier_id
+
+
 def test_add_item_page_stays_on_page_and_confirms_item_added(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
