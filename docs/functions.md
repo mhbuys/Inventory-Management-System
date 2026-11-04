@@ -82,7 +82,8 @@ This document describes the current item-management functions and where readers 
   `Item added to the inventory.` and redirects back to `/add-item`, keeping the
   user on the Add Item page for additional entries.
 - **Failure behavior:** Keeps the user on the Add Item page, returns HTTP 400,
-  and displays an error confirmation when submitted values are invalid.
+  and displays a banner error when submitted values are invalid or the item name
+  already exists.
 - **Database behavior:** Uses `add_item` to commit the product and inventory
   records together.
 

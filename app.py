@@ -773,8 +773,14 @@ def create_app(test_config=None):
                     if request.form.get("supplier_id")
                     else None,
                 )
-            except (KeyError, TypeError, ValueError):
-                flash("Unable to add the item. Check the entered values and try again.", "error")
+            except (KeyError, TypeError, ValueError, sqlite3.IntegrityError) as error:
+                message = (
+                    "An item with that name already exists."
+                    if isinstance(error, sqlite3.IntegrityError)
+                    and str(error) == "UNIQUE constraint failed: products.name"
+                    else "Unable to add the item. Check the entered values and try again."
+                )
+                flash(message, "error")
                 suppliers = query_db(
                     "SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name COLLATE NOCASE"
                 )

@@ -1176,6 +1176,34 @@ def test_add_item_page_stays_on_page_and_confirms_failure(tmp_path):
     assert b"Add Item" in response.data
 
 
+def test_add_item_page_displays_error_for_duplicate_name(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        add_item("Catan", "board_game")
+
+    client = app.test_client()
+    login_as_admin(client)
+    response = client.post(
+        "/add-item",
+        data={"name": "Catan", "category": "board_game", "quantity": "1"},
+    )
+
+    assert response.status_code == 400
+    assert b"An item with that name already exists." in response.data
+    assert b'role="alert"' in response.data
+    with app.app_context():
+        product_count = get_db().execute(
+            "SELECT COUNT(*) FROM products WHERE name = ?", ("Catan",)
+        ).fetchone()[0]
+
+    assert product_count == 1
+
+
 def test_stock_planning_updates_selected_item_settings(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
