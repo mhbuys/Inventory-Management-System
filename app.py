@@ -428,6 +428,43 @@ def create_app(test_config=None):
         database.commit()
         return redirect(url_for("reorder_page"))
 
+    # Complete a queued reorder and record the action in the event log.
+    @app.post("/reorders/<int:reorder_id>/complete")
+    @role_required("admin", "manager")
+    def complete_reorder(reorder_id):
+        database = get_db()
+
+        order = database.execute(
+            """
+            SELECT reorders.reorder_id, reorders.quantity_ordered,
+                   products.name
+            FROM reorders
+            JOIN products ON products.product_id = reorders.product_id
+            WHERE reorders.reorder_id = ?
+              AND reorders.status IN ('pending', 'ordered')
+            """,
+            (reorder_id,),
+        ).fetchone()
+
+        if order is None:
+            return "Queued order not found or already completed.", 404
+
+        database.execute(
+            """UPDATE reorders
+            SET status = 'completed'
+            WHERE reorder_id = ?""",
+            (reorder_id,),
+        )
+
+        log_event(
+            "reorder_completed",
+            f"Completed reorder for {order['name']} "
+            f"({order['quantity_ordered']} units)",
+        )
+
+        database.commit()
+        return redirect(url_for("reorder_page"))
+
     # Adjust stock from the inventory page.
     @app.post("/adjust-stock")
     @role_required("admin", "manager", "employee")
