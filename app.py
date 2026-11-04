@@ -451,7 +451,7 @@ def create_app(test_config=None):
 
         database.execute(
             """UPDATE reorders
-            SET status = 'completed'
+            SET status = 'received'
             WHERE reorder_id = ?""",
             (reorder_id,),
         )
