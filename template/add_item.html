@@ -37,17 +37,20 @@
         <h1 id="add-item-title">Add Item</h1>
 
         <!-- Submit the new product details to the add-item route. -->
-        <form class="stock-planning-form" method="post">
+        <form class="stock-planning-form" method="post" novalidate>
+            {% set form = form or {} %}
+            {% set errors = errors or {} %}
             <label for="item-name">Item Name</label>
-            <input id="item-name" type="text" name="name">
+            <input id="item-name" type="text" name="name" value="{{ form.get('name', '') }}" required>
+            {% if errors.name %}<p class="flash-message error" role="alert">{{ errors.name }}</p>{% endif %}
 
             <label for="item-category">Category</label>
             <select id="item-category" name="category" required>
-                <option value="board_game">Board Game</option>
-                <option value="card_game">Card Game</option>
-                <option value="dice">Dice</option>
-                <option value="miniature">Miniature</option>
+                {% for value, label in [('board_game', 'Board Game'), ('card_game', 'Card Game'), ('dice', 'Dice'), ('miniature', 'Miniature')] %}
+                <option value="{{ value }}" {{ 'selected' if form.get('category') == value }}>{{ label }}</option>
+                {% endfor %}
             </select>
+            {% if errors.category %}<p class="flash-message error" role="alert">{{ errors.category }}</p>{% endif %}
 
             <!-- Assign the item to an existing supplier managed on the supplier page. -->
             <label for="item-supplier">Supplier</label>
@@ -56,21 +59,25 @@
                 <option value="">No supplier</option>
                 {% for supplier in suppliers %}
                 <!-- Submit the supplier ID while displaying its readable name. -->
-                <option value="{{ supplier['supplier_id'] }}">{{ supplier['supplier_name'] }}</option>
+                <option value="{{ supplier['supplier_id'] }}" {{ 'selected' if form.get('supplier_id') == supplier['supplier_id']|string }}>{{ supplier['supplier_name'] }}</option>
                 {% endfor %}
             </select>
+            {% if errors.supplier_id %}<p class="flash-message error" role="alert">{{ errors.supplier_id }}</p>{% endif %}
 
             <label for="item-description">Description</label>
-            <input id="item-description" type="text" name="description">
+            <input id="item-description" type="text" name="description" value="{{ form.get('description', '') }}">
 
             <label for="item-price">Price</label>
-            <input id="item-price" type="number" name="price" step="0.01">
+            <input id="item-price" type="number" name="price" step="0.01" min="0.01" value="{{ form.get('price', '') }}" required>
+            {% if errors.price %}<p class="flash-message error" role="alert">{{ errors.price }}</p>{% endif %}
 
             <label for="item-quantity">Quantity</label>
-            <input id="item-quantity" type="number" name="quantity" min="0" required>
+            <input id="item-quantity" type="number" name="quantity" min="0" value="{{ form.get('quantity', '') }}" required>
+            {% if errors.quantity %}<p class="flash-message error" role="alert">{{ errors.quantity }}</p>{% endif %}
 
             <label for="low-stock-threshold">Low-stock threshold</label>
-            <input id="low-stock-threshold" type="number" name="low_stock_threshold" min="0" value="0" required>
+            <input id="low-stock-threshold" type="number" name="low_stock_threshold" min="0" value="{{ form.get('low_stock_threshold', '') }}" required>
+            {% if errors.low_stock_threshold %}<p class="flash-message error" role="alert">{{ errors.low_stock_threshold }}</p>{% endif %}
             
             
             <!-- Keep the form available for another item after a successful submission. -->
