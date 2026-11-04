@@ -129,7 +129,6 @@
                     </div>
                 </div>
                 <div class="item-actions">
-                    <span class="status">{{ order["status"] }}</span>
                     <form method="post" action="{{ url_for('cancel_reorder', reorder_id=order['reorder_id']) }}">
                         <button class="button button-danger" type="submit">Cancel order</button>
                     </form>
