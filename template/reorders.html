@@ -26,6 +26,11 @@
 </header>
 
 <main class="page-shell">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="flash-message {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
     {% if selected_item %}
     <!-- Show the low-stock item form when an item was selected from Inventory. -->
     <section class="inventory-panel" aria-labelledby="reorder-item-title">

@@ -851,10 +851,12 @@ def test_reorder_page_prevents_duplicate_active_orders(tmp_path):
     duplicate = client.post(
         "/reorders",
         data={"product_id": product_id, "quantity_ordered": "7"},
+        follow_redirects=True,
     )
 
-    assert duplicate.status_code == 409
+    assert duplicate.status_code == 200
     assert b"An active reorder already exists for this item" in duplicate.data
+    assert b'role="alert"' in duplicate.data
 
 
 def test_reorder_page_accepts_custom_order_amount(tmp_path):

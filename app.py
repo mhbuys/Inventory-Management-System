@@ -371,7 +371,11 @@ def create_app(test_config=None):
             (product_id,),
         ).fetchone()
         if active_order is not None:
-            return "An active reorder already exists for this item. Please cancel or complete it before creating another.", 409
+            flash(
+                "An active reorder already exists for this item. Please cancel or complete it before creating another.",
+                "error",
+            )
+            return redirect(url_for("reorder_page"))
         # Save the automatic amount only after all validation passes.
         if use_automatic_amount:
             database.execute(
