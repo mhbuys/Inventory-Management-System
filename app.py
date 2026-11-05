@@ -758,27 +758,91 @@ def create_app(test_config=None):
     @role_required("admin", "manager")
     def add_item_page():
         if request.method == "POST":
-            try:
-                add_item(
-                    name=request.form["name"],
-                    category=request.form["category"],
-                    description=request.form.get("description") or None,
-                    price=float(request.form.get("price") or 0),
-                    quantity=int(request.form.get("quantity") or 0),
-                    low_stock_threshold=int(
-                        request.form.get("low_stock_threshold") or 0
-                    ),
-                    user_id=session["user_id"],
-                    supplier_id=int(request.form["supplier_id"])
-                    if request.form.get("supplier_id")
-                    else None,
-                )
-            except (KeyError, TypeError, ValueError):
-                flash("Unable to add the item. Check the entered values and try again.", "error")
+            form = request.form
+            errors = {}
+            name = (form.get("name") or "").strip()
+            if not name:
+                errors["name"] = "Item name is required."
+            elif query_db(
+                "SELECT 1 FROM products WHERE name = ? COLLATE NOCASE", (name,)
+            ):
+                errors["name"] = "An item with this name already exists."
+
+            if form.get("category") not in (
+                "board_game", "card_game", "dice", "miniature"
+            ):
+                errors["category"] = "Category is required."
+
+            price = None
+            if not (form.get("price") or "").strip():
+                errors["price"] = "Price is required."
+            else:
+                try:
+                    price = float(form["price"])
+                    if not price > 0:
+                        errors["price"] = "Price must be greater than 0."
+                except ValueError:
+                    errors["price"] = "Price must be a number."
+
+            quantity = None
+            if not (form.get("quantity") or "").strip():
+                errors["quantity"] = "Quantity is required."
+            else:
+                try:
+                    quantity = int(form["quantity"])
+                    if quantity < 0:
+                        errors["quantity"] = "Quantity cannot be negative."
+                except ValueError:
+                    errors["quantity"] = "Quantity must be a whole number."
+
+            low_stock_threshold = None
+            if not (form.get("low_stock_threshold") or "").strip():
+                errors["low_stock_threshold"] = "Low-stock threshold is required."
+            else:
+                try:
+                    low_stock_threshold = int(form["low_stock_threshold"])
+                    if low_stock_threshold < 0:
+                        errors["low_stock_threshold"] = "Low-stock threshold cannot be negative."
+                except ValueError:
+                    errors["low_stock_threshold"] = "Low-stock threshold must be a whole number."
+
+            supplier_id = None
+            if form.get("supplier_id"):
+                try:
+                    supplier_id = int(form["supplier_id"])
+                except ValueError:
+                    errors["supplier_id"] = "Select a valid supplier."
+
+            if not errors:
+                try:
+                    add_item(
+                        name=name,
+                        category=form["category"],
+                        description=(form.get("description") or "").strip() or None,
+                        price=price,
+                        quantity=quantity,
+                        low_stock_threshold=low_stock_threshold,
+                        user_id=session["user_id"],
+                        supplier_id=supplier_id,
+                    )
+                except sqlite3.IntegrityError:
+                    errors["name"] = "An item with this name already exists."
+                except ValueError:
+                    errors["supplier_id"] = "Select a valid supplier."
+
+            if errors:
                 suppliers = query_db(
                     "SELECT supplier_id, supplier_name FROM suppliers ORDER BY supplier_name COLLATE NOCASE"
                 )
-                return render_template("add_item.html", suppliers=suppliers), 400
+                return (
+                    render_template(
+                        "add_item.html",
+                        suppliers=suppliers,
+                        errors=errors,
+                        form=form,
+                    ),
+                    400,
+                )
 
             # Keep the user on the add form so another item can be entered immediately.
             flash("Item added to the inventory.", "success")
