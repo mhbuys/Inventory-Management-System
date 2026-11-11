@@ -1,3 +1,5 @@
+import re
+
 import pyotp
 
 from app import create_app
@@ -1101,7 +1103,10 @@ def test_add_item_page_lists_and_assigns_managed_suppliers(tmp_path):
     page = client.get("/add-item")
 
     assert page.status_code == 200
-    assert f'value="{supplier_id}">Northwind Games'.encode() in page.data
+    assert re.search(
+        rf'<option\s+value="{supplier_id}"\s*>Northwind Games</option>'.encode(),
+        page.data,
+    )
 
     response = client.post(
         "/add-item",
