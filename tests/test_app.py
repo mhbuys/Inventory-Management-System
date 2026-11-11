@@ -1,3 +1,5 @@
+import re
+
 import pyotp
 
 from app import create_app
@@ -1101,13 +1103,17 @@ def test_add_item_page_lists_and_assigns_managed_suppliers(tmp_path):
     page = client.get("/add-item")
 
     assert page.status_code == 200
-    assert f'value="{supplier_id}">Northwind Games'.encode() in page.data
+    assert re.search(
+        rf'<option\s+value="{supplier_id}"\s*>Northwind Games</option>'.encode(),
+        page.data,
+    )
 
     response = client.post(
         "/add-item",
         data={
             "name": "New item",
             "category": "card_game",
+            "price": "12.99",
             "quantity": "3",
             "low_stock_threshold": "1",
             "supplier_id": str(supplier_id),
@@ -1168,12 +1174,23 @@ def test_add_item_page_stays_on_page_and_confirms_failure(tmp_path):
     login_as_admin(client)
     response = client.post(
         "/add-item",
-        data={"name": "Invalid", "category": "board_game", "quantity": "not-a-number"},
+        data={
+            "name": "Invalid",
+            "category": "board_game",
+            "price": "12.99",
+            "quantity": "not-a-number",
+            "low_stock_threshold": "1",
+        },
     )
 
     assert response.status_code == 400
-    assert b"Unable to add the item." in response.data
+    assert b"Quantity must be a whole number." in response.data
     assert b"Add Item" in response.data
+    with app.app_context():
+        product = get_db().execute(
+            "SELECT 1 FROM products WHERE name = ?", ("Invalid",)
+        ).fetchone()
+    assert product is None
 
 
 def test_stock_planning_updates_selected_item_settings(tmp_path):

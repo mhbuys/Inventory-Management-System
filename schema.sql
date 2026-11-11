@@ -25,7 +25,7 @@ CREATE TABLE suppliers (
 -- Core product catalog. Each item is unique by name and belongs to an allowed category.
 CREATE TABLE products (
     product_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE CHECK (length(trim(name)) > 0),
     description TEXT,
     price REAL NOT NULL DEFAULT 0 CHECK (price >= 0),
     category TEXT NOT NULL CHECK (category IN ('board_game', 'card_game', 'dice', 'miniature')),
