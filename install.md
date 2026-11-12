@@ -26,7 +26,7 @@ The server requires:
 
 ## Ubuntu Installation
 
-Run the following commands in the Ubuntu terminal to install everything needed for this project:
+Install the system packages:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
