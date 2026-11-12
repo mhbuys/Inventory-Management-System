@@ -129,10 +129,14 @@
                     </div>
                 </div>
                 <div class="item-actions">
-                    <span class="status">{{ order["status"] }}</span>
+                    <!-- Mark a queued order as completed. -->
+                    <form method="post" action="{{ url_for('complete_reorder', reorder_id=order['reorder_id']) }}">
+                        <button class="button button-primary" type="submit">Complete Order</button>
+                    </form>
+                    <!-- Cancel a queued order. -->
                     <form method="post" action="{{ url_for('cancel_reorder', reorder_id=order['reorder_id']) }}">
                         <button class="button button-danger" type="submit">Cancel order</button>
-                    </form>
+                    </form>   
                 </div>
             </article>
             {% else %}
