@@ -1022,6 +1022,67 @@ def test_queued_order_can_be_cancelled(tmp_path):
     assert status == "cancelled"
 
 
+def test_completing_queued_order_adds_ordered_quantity_to_inventory(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        product_id = add_item(
+            "Catan",
+            "board_game",
+            quantity=3,
+            low_stock_threshold=2,
+            reorder_amount=0,
+        )
+
+    client = app.test_client()
+    login_as_admin(client)
+    assert (
+        client.post(
+            "/reorders",
+            data={"product_id": product_id, "quantity_ordered": "7"},
+        ).status_code
+        == 302
+    )
+    with app.app_context():
+        reorder_id = get_db().execute(
+            "SELECT reorder_id FROM reorders WHERE product_id = ?",
+            (product_id,),
+        ).fetchone()[0]
+
+    response = client.post(f"/reorders/{reorder_id}/complete")
+
+    assert response.status_code == 302
+    confirmation = client.get(response.headers["Location"])
+    assert b"Order completed: added 7 units of Catan to inventory." in confirmation.data
+    with app.app_context():
+        database = get_db()
+        inventory = database.execute(
+            "SELECT quantity FROM inventory WHERE product_id = ?",
+            (product_id,),
+        ).fetchone()
+        order = database.execute(
+            "SELECT status FROM reorders WHERE reorder_id = ?",
+            (reorder_id,),
+        ).fetchone()
+        transaction = database.execute(
+            """
+            SELECT quantity_change, transaction_type
+            FROM inventory_transactions
+            WHERE product_id = ?
+            ORDER BY transaction_id DESC LIMIT 1
+            """,
+            (product_id,),
+        ).fetchone()
+
+    assert inventory["quantity"] == 10
+    assert order["status"] == "received"
+    assert tuple(transaction) == (7, "reorder")
+
+
 def test_cancel_missing_or_completed_order_returns_not_found(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
