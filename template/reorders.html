@@ -26,6 +26,13 @@
 </header>
 
 <main class="page-shell">
+    <p id="completion-message" class="flash-message success" role="status" hidden></p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="flash-message {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+    {% endwith %}
+
     {% if selected_item %}
     <!-- Show the low-stock item form when an item was selected from Inventory. -->
     <section class="inventory-panel" aria-labelledby="reorder-item-title">
@@ -129,8 +136,11 @@
                     </div>
                 </div>
                 <div class="item-actions">
-                    <!-- Mark a queued order as completed. -->
-                    <form method="post" action="{{ url_for('complete_reorder', reorder_id=order['reorder_id']) }}">
+                    <!-- Mark a queued order as completed and update the inventory. -->
+                    <form class="complete-reorder-form"
+                          method="post"
+                          action="{{ url_for('complete_reorder', reorder_id=order['reorder_id']) }}"
+                          data-confirmation="Order completed: added {{ order['quantity_ordered'] }} units of {{ order['name'] }} to inventory.">
                         <button class="button button-primary" type="submit">Complete Order</button>
                     </form>
                     <!-- Cancel a queued order. -->
@@ -145,4 +155,39 @@
         </div>
     </section>
 </main>
+<script>
+    document.querySelectorAll(".complete-reorder-form").forEach(function (form) {
+        form.addEventListener("submit", async function (event) {
+            event.preventDefault();
+            const button = form.querySelector("button[type='submit']");
+            button.disabled = true;
+
+            try {
+                const response = await fetch(form.action, {
+                    method: "POST",
+                    body: new FormData(form),
+                    credentials: "same-origin",
+                });
+                const destination = new URL(response.url, window.location.origin);
+                if (!response.ok || destination.pathname !== "{{ url_for('reorder_page') }}") {
+                    throw new Error("The order could not be completed.");
+                }
+
+                const message = document.getElementById("completion-message");
+                message.textContent = form.dataset.confirmation;
+                message.hidden = false;
+                form.closest(".inventory-row").remove();
+                window.setTimeout(function () {
+                    window.location.assign(response.url);
+                }, 1500);
+            } catch (error) {
+                button.disabled = false;
+                const message = document.getElementById("completion-message");
+                message.className = "flash-message error";
+                message.textContent = error.message;
+                message.hidden = false;
+            }
+        });
+    });
+</script>
 {% endblock %}
