@@ -436,8 +436,8 @@ def create_app(test_config=None):
 
         order = database.execute(
             """
-            SELECT reorders.reorder_id, reorders.quantity_ordered,
-                   products.name
+            SELECT reorders.reorder_id, reorders.product_id,
+                   reorders.quantity_ordered, products.name
             FROM reorders
             JOIN products ON products.product_id = reorders.product_id
             WHERE reorders.reorder_id = ?
@@ -449,20 +449,56 @@ def create_app(test_config=None):
         if order is None:
             return "Queued order not found or already completed.", 404
 
-        database.execute(
-            """UPDATE reorders
-            SET status = 'received'
-            WHERE reorder_id = ?""",
-            (reorder_id,),
-        )
+        database.execute("BEGIN IMMEDIATE")
+        try:
+            inventory = database.execute(
+                "SELECT quantity FROM inventory WHERE product_id = ?",
+                (order["product_id"],),
+            ).fetchone()
+            if inventory is None:
+                raise ValueError(f"No inventory record found for product {order['product_id']}")
 
-        log_event(
-            "reorder_completed",
-            f"Completed reorder for {order['name']} "
-            f"({order['quantity_ordered']} units)",
-        )
+            database.execute(
+                """
+                UPDATE inventory
+                SET quantity = quantity + ?
+                WHERE product_id = ?
+                """,
+                (order["quantity_ordered"], order["product_id"]),
+            )
+            database.execute(
+                """
+                INSERT INTO inventory_transactions
+                    (product_id, user_id, quantity_change, transaction_type)
+                VALUES (?, ?, ?, 'reorder')
+                """,
+                (
+                    order["product_id"],
+                    session["user_id"],
+                    order["quantity_ordered"],
+                ),
+            )
+            database.execute(
+                """UPDATE reorders
+                SET status = 'received'
+                WHERE reorder_id = ?""",
+                (reorder_id,),
+            )
+            log_event(
+                "reorder_completed",
+                f"Completed reorder for {order['name']} "
+                f"({order['quantity_ordered']} units)",
+            )
+            database.commit()
+        except Exception:
+            database.rollback()
+            raise
 
-        database.commit()
+        flash(
+            f"Order completed: added {order['quantity_ordered']} units of "
+            f"{order['name']} to inventory.",
+            "success",
+        )
         return redirect(url_for("reorder_page"))
 
     # Adjust stock from the inventory page.
