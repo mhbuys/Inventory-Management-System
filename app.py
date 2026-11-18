@@ -17,6 +17,7 @@ from items import add_item, add_supplier, adjust_quantity, remove_item, remove_s
 
 ROLE_NAMES = ("admin", "manager", "employee", "viewer")
 
+INVENTORY_PAGE_SIZE = 10
 BACKUP_CODE_COUNT = 8  # Number of one-time backup codes issued per user - NL
 TEMPORARY_PASSWORD_LENGTH = 12
 
@@ -143,6 +144,17 @@ def create_app(test_config=None):
     @app.get("/")
     @login_required
     def inventory_page():
+        total_items = query_db(
+            """SELECT COUNT(*) AS total
+            FROM products
+            WHERE status = 'active'"""
+        )[0]["total"]
+        page_count = max(
+            1, (total_items + INVENTORY_PAGE_SIZE - 1) // INVENTORY_PAGE_SIZE
+        )
+        page = request.args.get("page", 1, type=int) or 1
+        page = min(max(page, 1), page_count)
+
         inventory = query_db("""
             SELECT products.product_id, products.name, products.category,
                    products.price, inventory.quantity,
@@ -162,9 +174,16 @@ def create_app(test_config=None):
             JOIN inventory ON inventory.product_id = products.product_id
             LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
             WHERE products.status = 'active'
-            ORDER BY products.name COLLATE NOCASE
-            """)
-        return render_template("inventory.html", inventory=inventory)
+            ORDER BY products.name COLLATE NOCASE, products.product_id
+            LIMIT ? OFFSET ?
+            """, (INVENTORY_PAGE_SIZE, (page - 1) * INVENTORY_PAGE_SIZE))
+        return render_template(
+            "inventory.html",
+            inventory=inventory,
+            total_items=total_items,
+            page=page,
+            page_count=page_count,
+        )
 
     @app.route(
         "/shipping-control", methods=["GET", "POST"], endpoint="stock_planning_legacy"

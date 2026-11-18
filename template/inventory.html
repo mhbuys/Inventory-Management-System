@@ -34,7 +34,7 @@
                 <h1 id="inventory-title">Inventory</h1>
                 <p class="muted">Current stock from the inventory database.</p>
             </div>
-            <span class="status">{{ inventory|length }} items tracked</span>
+            <span class="status">{{ total_items }} items tracked</span>
         </div>
 
         <div class="inventory-list">
@@ -97,6 +97,30 @@
             <p class="muted">No active inventory items found.</p>
             {% endfor %}
         </div>
+        {% if page_count > 1 %}
+        <nav class="inventory-pagination" aria-label="Inventory pages">
+            <form method="get">
+                <button class="button button-quiet" type="submit" name="page" value="{{ page - 1 }}"{% if page == 1 %} disabled{% endif %}>
+                    Previous
+                </button>
+            </form>
+            <form method="get">
+                <label for="inventory-page">Page</label>
+                <select id="inventory-page" name="page" onchange="this.form.submit()">
+                    {% for page_number in range(1, page_count + 1) %}
+                    <option value="{{ page_number }}"{% if page_number == page %} selected{% endif %}>
+                        {{ page_number }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+            <form method="get">
+                <button class="button button-quiet" type="submit" name="page" value="{{ page + 1 }}"{% if page == page_count %} disabled{% endif %}>
+                    Next
+                </button>
+            </form>
+        </nav>
+        {% endif %}
     </section>
 </main>
 
