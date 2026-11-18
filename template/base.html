@@ -161,6 +161,23 @@
                 gap: 1rem;
                 margin-bottom: 1.5rem;
             }
+            .inventory-heading-tools {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: .75rem;
+            }
+            .inventory-search {
+                display: flex;
+                gap: .4rem;
+            }
+            .inventory-search input {
+                width: min(20rem, 55vw);
+                border: 1px solid var(--line);
+                padding: .6rem;
+                color: var(--ink);
+                background: var(--surface);
+            }
 
             /* ### Design: rows make item names, details, and actions easy to scan. */
             .inventory-list { border-top: 1px solid var(--line); }
@@ -175,6 +192,20 @@
 
             .inventory-row strong { display: block; margin-bottom: .25rem; }
             .status { color: var(--accent); font: 700 .75rem Arial, sans-serif; text-transform: uppercase; }
+            .inventory-pagination {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: .6rem;
+                padding-top: 1rem;
+            }
+            .inventory-pagination form { margin: 0; }
+            .inventory-pagination select {
+                border: 1px solid var(--line);
+                padding: .55rem;
+                color: var(--ink);
+                background: var(--surface);
+            }
 
             .stock-planning-form {
                 display: grid;
@@ -197,6 +228,8 @@
                 .page-shell { grid-template-columns: 1fr; padding-top: 2rem; }
                 .banner-actions, .item-actions { width: 100%; }
                 .banner-actions .button, .item-actions .button { flex: 1; text-align: center; }
+                .inventory-heading-tools { align-items: stretch; }
+                .inventory-search input { width: 100%; min-width: 0; }
             }
         </style>
     </head>

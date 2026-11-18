@@ -34,7 +34,14 @@
                 <h1 id="inventory-title">Inventory</h1>
                 <p class="muted">Current stock from the inventory database.</p>
             </div>
-            <span class="status">{{ inventory|length }} items tracked</span>
+            <div class="inventory-heading-tools">
+                <form class="inventory-search" method="get" role="search">
+                    <input type="search" name="search" value="{{ search_query }}"
+                           placeholder="Search inventory" aria-label="Search inventory">
+                    <button class="button button-primary" type="submit">Search</button>
+                </form>
+                <span class="status">{% if search_query %}{{ total_items }} matching items{% else %}{{ total_items }} items tracked{% endif %}</span>
+            </div>
         </div>
 
         <div class="inventory-list">
@@ -94,9 +101,38 @@
                 {% endif %}
             </article>
             {% else %}
-            <p class="muted">No active inventory items found.</p>
+            <p class="muted">
+                {% if search_query %}No inventory items match your search.{% else %}No active inventory items found.{% endif %}
+            </p>
             {% endfor %}
         </div>
+        {% if page_count > 1 %}
+        <nav class="inventory-pagination" aria-label="Inventory pages">
+            <form method="get">
+                <input type="hidden" name="search" value="{{ search_query }}">
+                <button class="button button-quiet" type="submit" name="page" value="{{ page - 1 }}"{% if page == 1 %} disabled{% endif %}>
+                    Previous
+                </button>
+            </form>
+            <form method="get">
+                <input type="hidden" name="search" value="{{ search_query }}">
+                <label for="inventory-page">Page</label>
+                <select id="inventory-page" name="page" onchange="this.form.submit()">
+                    {% for page_number in range(1, page_count + 1) %}
+                    <option value="{{ page_number }}"{% if page_number == page %} selected{% endif %}>
+                        {{ page_number }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+            <form method="get">
+                <input type="hidden" name="search" value="{{ search_query }}">
+                <button class="button button-quiet" type="submit" name="page" value="{{ page + 1 }}"{% if page == page_count %} disabled{% endif %}>
+                    Next
+                </button>
+            </form>
+        </nav>
+        {% endif %}
     </section>
 </main>
 

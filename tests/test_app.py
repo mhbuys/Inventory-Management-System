@@ -545,6 +545,56 @@ def test_homepage_displays_database_inventory(tmp_path):
     assert "Sample item" not in page
 
 
+def test_inventory_is_split_into_pages_of_ten(tmp_path):
+    database_path = tmp_path / "inventory.db"
+    app = create_app(
+        {"TESTING": True, "SECRET_KEY": "test-secret", "DATABASE": str(database_path)}
+    )
+
+    with app.app_context():
+        init_db()
+        for index in range(12):
+            add_item(f"Item {index:02}", "board_game")
+
+    client = app.test_client()
+    login_as_admin(client)
+
+    first_page = client.get("/").get_data(as_text=True)
+    assert "12 items tracked" in first_page
+    assert "Item 09" in first_page
+    assert "Item 10" not in first_page
+    assert '<select id="inventory-page" name="page" onchange="this.form.submit()">' in first_page
+    assert '<option value="1" selected>' in first_page
+    assert "onchange=\"this.form.submit()\"" in first_page
+    assert ">Go</button>" not in first_page
+    assert "Previous" in first_page
+    assert 'name="page" value="0" disabled' in first_page
+    assert "Next" in first_page
+
+    second_page = client.get("/?page=2").get_data(as_text=True)
+    assert "Item 10" in second_page
+    assert "Item 11" in second_page
+    assert "Item 09" not in second_page
+    assert '<option value="2" selected>' in second_page
+    assert 'name="page" value="1"' in second_page
+    assert 'name="page" value="3" disabled' in second_page
+
+    out_of_range_page = client.get("/?page=3").get_data(as_text=True)
+    assert "Item 11" in out_of_range_page
+    assert "Item 09" not in out_of_range_page
+    assert '<option value="2" selected>' in out_of_range_page
+
+    search_results = client.get("/?search=Item+1").get_data(as_text=True)
+    assert "2 matching items" in search_results
+    assert "Item 10" in search_results
+    assert "Item 11" in search_results
+    assert "Item 09" not in search_results
+
+    searched_second_page = client.get("/?search=Item&page=2").get_data(as_text=True)
+    assert "Item 10" in searched_second_page
+    assert 'name="search" value="Item"' in searched_second_page
+
+
 def test_inventory_disables_removal_when_stock_is_zero(tmp_path):
     database_path = tmp_path / "inventory.db"
     app = create_app(
