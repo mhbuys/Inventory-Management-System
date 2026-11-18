@@ -144,10 +144,27 @@ def create_app(test_config=None):
     @app.get("/")
     @login_required
     def inventory_page():
+        search_query = request.args.get("search", "").strip()
+        search_condition = ""
+        search_parameters = []
+        if search_query:
+            search_condition = """
+                AND (
+                    products.name LIKE ? COLLATE NOCASE
+                    OR products.category LIKE ? COLLATE NOCASE
+                    OR products.supplier_sku LIKE ? COLLATE NOCASE
+                    OR suppliers.supplier_name LIKE ? COLLATE NOCASE
+                )
+            """
+            search_term = f"%{search_query}%"
+            search_parameters = [search_term] * 4
+
         total_items = query_db(
-            """SELECT COUNT(*) AS total
+            f"""SELECT COUNT(*) AS total
             FROM products
-            WHERE status = 'active'"""
+            LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
+            WHERE products.status = 'active' {search_condition}""",
+            search_parameters,
         )[0]["total"]
         page_count = max(
             1, (total_items + INVENTORY_PAGE_SIZE - 1) // INVENTORY_PAGE_SIZE
@@ -155,7 +172,7 @@ def create_app(test_config=None):
         page = request.args.get("page", 1, type=int) or 1
         page = min(max(page, 1), page_count)
 
-        inventory = query_db("""
+        inventory = query_db(f"""
             SELECT products.product_id, products.name, products.category,
                    products.price, inventory.quantity,
                    inventory.low_stock_threshold,
@@ -173,16 +190,19 @@ def create_app(test_config=None):
             FROM products
             JOIN inventory ON inventory.product_id = products.product_id
             LEFT JOIN suppliers ON suppliers.supplier_id = products.supplier_id
-            WHERE products.status = 'active'
+            WHERE products.status = 'active' {search_condition}
             ORDER BY products.name COLLATE NOCASE, products.product_id
             LIMIT ? OFFSET ?
-            """, (INVENTORY_PAGE_SIZE, (page - 1) * INVENTORY_PAGE_SIZE))
+            """,
+            search_parameters + [INVENTORY_PAGE_SIZE, (page - 1) * INVENTORY_PAGE_SIZE],
+        )
         return render_template(
             "inventory.html",
             inventory=inventory,
             total_items=total_items,
             page=page,
             page_count=page_count,
+            search_query=search_query,
         )
 
     @app.route(

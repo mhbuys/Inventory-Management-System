@@ -584,6 +584,16 @@ def test_inventory_is_split_into_pages_of_ten(tmp_path):
     assert "Item 09" not in out_of_range_page
     assert '<option value="2" selected>' in out_of_range_page
 
+    search_results = client.get("/?search=Item+1").get_data(as_text=True)
+    assert "2 matching items" in search_results
+    assert "Item 10" in search_results
+    assert "Item 11" in search_results
+    assert "Item 09" not in search_results
+
+    searched_second_page = client.get("/?search=Item&page=2").get_data(as_text=True)
+    assert "Item 10" in searched_second_page
+    assert 'name="search" value="Item"' in searched_second_page
+
 
 def test_inventory_disables_removal_when_stock_is_zero(tmp_path):
     database_path = tmp_path / "inventory.db"
